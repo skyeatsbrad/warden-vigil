@@ -1,19 +1,19 @@
 // ── Game state manager ──
 
-import { Player } from './player.js';
-import { Companion, processOrbitDamage } from './companion.js';
-import { EnemySystem } from './enemy.js';
-import { ProjectileSystem } from './projectile.js';
-import { XPSystem } from './xp.js';
-import { Particles } from './particles.js';
-import { Camera } from './camera.js';
-import { UI } from './ui.js';
-import { Progression } from './progression.js';
-import { processCollisions, handleProjectileHit } from './collision.js';
-import { SpatialGrid } from './spatial-grid.js';
-import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel } from './data/companions.js';
-import { COLORS } from './data/colors.js';
-import { formatTime, dist, weightedPick } from './utils.js';
+import { Player } from './player.js?v=4';
+import { Companion, processOrbitDamage } from './companion.js?v=4';
+import { EnemySystem } from './enemy.js?v=4';
+import { ProjectileSystem } from './projectile.js?v=4';
+import { XPSystem } from './xp.js?v=4';
+import { Particles } from './particles.js?v=4';
+import { Camera } from './camera.js?v=4';
+import { UI } from './ui.js?v=4';
+import { Progression } from './progression.js?v=4';
+import { processCollisions, handleProjectileHit } from './collision.js?v=4';
+import { SpatialGrid } from './spatial-grid.js?v=4';
+import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel } from './data/companions.js?v=4';
+import { COLORS } from './data/colors.js?v=4';
+import { formatTime, dist, weightedPick } from './utils.js?v=4';
 
 export class Game {
   constructor(canvas, input) {

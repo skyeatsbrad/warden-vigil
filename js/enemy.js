@@ -1,8 +1,8 @@
 // ── Enemy spawning + AI ──
 
-import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy } from './data/enemies.js';
-import { weightedPick } from './utils.js';
-import { GLOW } from './data/colors.js';
+import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy } from './data/enemies.js?v=4';
+import { weightedPick } from './utils.js?v=4';
+import { GLOW } from './data/colors.js?v=4';
 
 let _nextEnemyId = 0;
 
