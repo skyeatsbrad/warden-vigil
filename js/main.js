@@ -32,6 +32,7 @@ const game = new Game(canvas, input);
 function resize() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
+  input.resize(canvas.width, canvas.height);
   game.resize(canvas.width, canvas.height);
 }
 

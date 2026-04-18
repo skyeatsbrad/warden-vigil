@@ -7,13 +7,30 @@ export class Input {
     this.joystick = { active: false, dx: 0, dy: 0 };
     this.joystickCanvas = joystickCanvas;
     this.joystickCtx = joystickCanvas ? joystickCanvas.getContext('2d') : null;
+    this.touchId = null;
+
+    // Default size — updated by resize()
+    this._size = 160;
     this.joystickCenter = { x: 80, y: 80 };
     this.joystickRadius = 55;
     this.knobRadius = 22;
-    this.touchId = null;
 
     this._bindKeyboard();
     if (joystickCanvas) this._bindTouch();
+  }
+
+  resize(screenW, screenH) {
+    if (!this.joystickCanvas) return;
+    // Scale joystick: 160 on ≥414px wide, down to 120 on ≤320px, up to 180 on ≥600px
+    const base = Math.min(screenW, screenH);
+    const size = Math.round(Math.max(120, Math.min(180, base * 0.4)));
+    this._size = size;
+    this.joystickCanvas.width = size;
+    this.joystickCanvas.height = size;
+    this.joystickCenter.x = size / 2;
+    this.joystickCenter.y = size / 2;
+    this.joystickRadius = Math.round(size * 0.34);
+    this.knobRadius = Math.round(size * 0.14);
   }
 
   _bindKeyboard() {
@@ -116,7 +133,8 @@ export class Input {
     const ctx = this.joystickCtx;
     const cx = this.joystickCenter.x;
     const cy = this.joystickCenter.y;
-    ctx.clearRect(0, 0, 160, 160);
+    const size = this._size;
+    ctx.clearRect(0, 0, size, size);
 
     // Base ring
     ctx.beginPath();
