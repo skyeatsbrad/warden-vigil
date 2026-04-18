@@ -549,14 +549,15 @@ export class Game {
       if (this._isMobile) {
         // On mobile: update DOM button labels with cooldown state (no canvas indicators)
         this._updateMobileButtons();
-        // Skip momentum meter on mobile portrait — it clutters the joystick area
-        // even when repositioned. Desktop draws it below.
+        // Skip momentum meter + surge text on mobile — they clutter touch areas.
+        // Keep surge border (red pulse) as it's useful danger feedback.
+        this._drawSurgeBorder(ctx);
       } else {
         this._drawUltimateIndicator(ctx);
         this._drawPanicIndicator(ctx);
         this._drawMomentumMeter(ctx);
+        this._drawSurgeIndicator(ctx);
       }
-      this._drawSurgeIndicator(ctx);
     }
 
     // Joystick
@@ -1147,6 +1148,14 @@ export class Game {
       ctx.textBaseline = 'top';
       ctx.fillText(`⚠ SURGE ${Math.ceil(this._surgeRemaining)}s`, this.canvas.width / 2, 50 + (this._safeTop || 0));
     }
+  }
+
+  _drawSurgeBorder(ctx) {
+    if (!this._surgeActive) return;
+    const pulse = Math.sin(performance.now() * 0.006) * 0.3 + 0.4;
+    ctx.strokeStyle = `rgba(255,50,50,${pulse})`;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(2, 2, this.canvas.width - 4, this.canvas.height - 4);
   }
 
   _gameOver() {
