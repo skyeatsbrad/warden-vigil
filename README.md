@@ -2,7 +2,7 @@
 
 A vampire survivors-style auto-battler survival game built with vanilla HTML5 Canvas + JavaScript. No frameworks, no build tools — just open and play.
 
-**[▶ Play Now](https://YOUR_USERNAME.github.io/warden-vigil/)**
+**[▶ Play Now](https://skyeatsbrad.github.io/warden-vigil/)**
 
 ## How to Play
 
