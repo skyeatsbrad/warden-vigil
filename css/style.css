@@ -303,7 +303,7 @@ canvas#joystick {
   height: 64px;
   border-radius: 50%;
   border: 2px solid #7ec8e3;
-  background: rgba(100,200,255,0.25);
+  background: rgba(100,200,255,0.3);
   color: #7ec8e3;
   font-size: 11px;
   font-weight: bold;
@@ -311,21 +311,28 @@ canvas#joystick {
   pointer-events: auto;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  /* Invisible padding extends hit area beyond visible circle */
+  padding: 0;
+  box-sizing: content-box;
 }
 @media (pointer: coarse) {
   #panic-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    bottom: calc(140px + env(safe-area-inset-bottom, 0px));
-    right: calc(20px + env(safe-area-inset-right, 0px));
+    bottom: calc(160px + env(safe-area-inset-bottom, 0px));
+    right: calc(16px + env(safe-area-inset-right, 0px));
+    /* 8px invisible border extends touch target to ~80px */
+    border-width: 2px;
+    outline: 8px solid transparent;
   }
   #ult-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    bottom: calc(52px + env(safe-area-inset-bottom, 0px));
-    right: calc(20px + env(safe-area-inset-right, 0px));
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+    right: calc(16px + env(safe-area-inset-right, 0px));
+    outline: 8px solid transparent;
   }
 }
 
@@ -340,7 +347,7 @@ canvas#joystick {
   height: 64px;
   border-radius: 50%;
   border: 2px solid #c9a0ff;
-  background: rgba(150,100,255,0.25);
+  background: rgba(150,100,255,0.3);
   color: #c9a0ff;
   font-size: 11px;
   font-weight: bold;
@@ -348,6 +355,8 @@ canvas#joystick {
   pointer-events: auto;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  padding: 0;
+  box-sizing: content-box;
 }
 
 /* ── Title Screen ── */

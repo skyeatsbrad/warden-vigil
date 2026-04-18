@@ -147,26 +147,22 @@ export class Game {
       }
     });
 
-    // Panic touch button
+    // Panic touch button — use pointerdown for reliable mobile response
     const panicBtn = document.getElementById('panic-btn');
     if (panicBtn) {
-      panicBtn.addEventListener('touchstart', e => {
+      panicBtn.addEventListener('pointerdown', e => {
         e.preventDefault();
-        if (this.state === 'playing') this._usePanic();
-      });
-      panicBtn.addEventListener('click', () => {
+        e.stopPropagation();
         if (this.state === 'playing') this._usePanic();
       });
     }
 
-    // Ultimate touch button
+    // Ultimate touch button — use pointerdown for reliable mobile response
     const ultBtn = document.getElementById('ult-btn');
     if (ultBtn) {
-      ultBtn.addEventListener('touchstart', e => {
+      ultBtn.addEventListener('pointerdown', e => {
         e.preventDefault();
-        if (this.state === 'playing' && this.ultimateCooldown <= 0) this._useUltimate();
-      });
-      ultBtn.addEventListener('click', () => {
+        e.stopPropagation();
         if (this.state === 'playing' && this.ultimateCooldown <= 0) this._useUltimate();
       });
     }
@@ -553,7 +549,8 @@ export class Game {
       if (this._isMobile) {
         // On mobile: update DOM button labels with cooldown state (no canvas indicators)
         this._updateMobileButtons();
-        this._drawMomentumMeter(ctx);
+        // Skip momentum meter on mobile portrait — it clutters the joystick area
+        // even when repositioned. Desktop draws it below.
       } else {
         this._drawUltimateIndicator(ctx);
         this._drawPanicIndicator(ctx);
@@ -1065,34 +1062,26 @@ export class Game {
   }
 
   _updateMobileButtons() {
-    // Update DOM button text + opacity to show cooldown state
     const ultBtn = this._ultBtnEl;
     if (ultBtn) {
-      const def = COMPANION_DEFS[this.selectedStarter];
       const ready = this.ultimateCooldown <= 0;
-      if (ready) {
-        ultBtn.textContent = 'ULT';
-        ultBtn.style.opacity = '1';
-        ultBtn.style.borderColor = '#c9a0ff';
-      } else {
-        ultBtn.textContent = Math.ceil(this.ultimateCooldown).toString();
-        ultBtn.style.opacity = '0.5';
-        ultBtn.style.borderColor = '#555';
-      }
+      ultBtn.textContent = ready ? 'ULT' : Math.ceil(this.ultimateCooldown).toString();
+      ultBtn.style.opacity = ready ? '1' : '0.45';
+      ultBtn.style.borderColor = ready ? '#c9a0ff' : '#444';
+      ultBtn.style.background = ready
+        ? 'rgba(150,100,255,0.3)'
+        : 'rgba(40,40,40,0.4)';
     }
 
     const panicBtn = this._panicBtnEl;
     if (panicBtn) {
       const ready = this.player.panicCooldown <= 0;
-      if (ready) {
-        panicBtn.textContent = 'PANIC';
-        panicBtn.style.opacity = '1';
-        panicBtn.style.borderColor = '#7ec8e3';
-      } else {
-        panicBtn.textContent = Math.ceil(this.player.panicCooldown).toString();
-        panicBtn.style.opacity = '0.5';
-        panicBtn.style.borderColor = '#555';
-      }
+      panicBtn.textContent = ready ? 'PANIC' : Math.ceil(this.player.panicCooldown).toString();
+      panicBtn.style.opacity = ready ? '1' : '0.45';
+      panicBtn.style.borderColor = ready ? '#7ec8e3' : '#444';
+      panicBtn.style.background = ready
+        ? 'rgba(100,200,255,0.3)'
+        : 'rgba(40,40,40,0.4)';
     }
   }
 
