@@ -1,5 +1,7 @@
 // ── Player (Warden) ──
 
+import { COLORS, GLOW } from './data/colors.js';
+
 export class Player {
   constructor(x, y) {
     this.x = x;
@@ -15,7 +17,7 @@ export class Player {
     this.xpToNext = 8;
     this.kills = 0;
     this.totalXp = 0;
-    this.color = '#c9a0ff';
+    this.color = COLORS.player;
     this.facingAngle = 0;
     this.magnetRadius = 85;
 
@@ -88,27 +90,42 @@ export class Player {
 
     const cy = sy + bob;
 
+    // Magnet ring
     ctx.beginPath();
     ctx.arc(sx, cy, this.magnetRadius, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(201,160,255,0.08)';
+    ctx.strokeStyle = COLORS.playerMagnet;
     ctx.lineWidth = 1;
     ctx.stroke();
 
+    // Breathing pulse — subtle size oscillation
+    const breathe = 1 + Math.sin(this._bobPhase * 0.7) * 0.03;
+    const r = this.radius * breathe;
+
+    // Outer halo (readability ring)
     ctx.beginPath();
-    ctx.arc(sx, cy, this.radius, 0, Math.PI * 2);
+    ctx.arc(sx, cy, r + 4, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(126,200,227,0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Main body — bright white/cyan
+    ctx.beginPath();
+    ctx.arc(sx, cy, r, 0, Math.PI * 2);
     ctx.fillStyle = this.color;
-    ctx.shadowColor = this.color;
-    ctx.shadowBlur = 12;
+    ctx.shadowColor = COLORS.playerGlow;
+    ctx.shadowBlur = GLOW.player;
     ctx.fill();
     ctx.shadowBlur = 0;
 
-    const dx = Math.cos(this.facingAngle) * this.radius * 1.1;
-    const dy = Math.sin(this.facingAngle) * this.radius * 1.1;
+    // Facing dot
+    const dx = Math.cos(this.facingAngle) * r * 1.1;
+    const dy = Math.sin(this.facingAngle) * r * 1.1;
     ctx.beginPath();
     ctx.arc(sx + dx, cy + dy, 4, 0, Math.PI * 2);
     ctx.fillStyle = '#fff';
     ctx.fill();
 
+    // Inner highlight
     ctx.beginPath();
     ctx.arc(sx, cy - 2, 4, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(255,255,255,0.7)';

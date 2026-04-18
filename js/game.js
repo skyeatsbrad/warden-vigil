@@ -12,6 +12,7 @@ import { Progression } from './progression.js';
 import { processCollisions, handleProjectileHit } from './collision.js';
 import { SpatialGrid } from './spatial-grid.js';
 import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel } from './data/companions.js';
+import { COLORS } from './data/colors.js';
 import { formatTime, dist, weightedPick } from './utils.js';
 
 export class Game {
@@ -81,6 +82,10 @@ export class Game {
 
     // Run stats
     this._totalDamageDealt = 0;
+
+    // Panic pulse ring effect
+    this._panicRingT = 0;   // 0 = inactive, >0 = expanding
+    this._panicRingMax = 0.35;
 
     // Frame pressure tracking for adaptive quality
     this._smoothedDt = 0.016;
@@ -192,6 +197,7 @@ export class Game {
     this._curseEnemySpeedMult = 1;
     this._curseDrainAccum = 0;
     this._totalDamageDealt = 0;
+    this._panicRingT = 0;
     this.ui._pickedTradeoffs = new Set();
     this.camera.reset(0, 0);
 
@@ -277,6 +283,7 @@ export class Game {
       }
     }
     if (this._surgeWarningTime > 0) this._surgeWarningTime -= dt;
+    if (this._panicRingT > 0) this._panicRingT -= dt;
 
     // Apply curse spawn rate multiplier
     if (this._curseSpawnMult !== 1) {
@@ -466,7 +473,7 @@ export class Game {
     const cam = this.camera;
 
     // Clear
-    ctx.fillStyle = '#0a0a12';
+    ctx.fillStyle = COLORS.bg;
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
     if (this.state === 'title') return;
@@ -475,28 +482,36 @@ export class Game {
     // Grid background
     this._drawGrid(ctx, cam);
 
-    // XP orbs
+    // XP orbs (lowest world layer)
     this.xpSystem.draw(ctx, cam);
+
+    // Aura effects (below enemies)
+    for (const c of this.companions) {
+      c.drawAura(ctx, cam);
+    }
 
     // Enemies
     this.enemySystem.draw(ctx, cam);
 
-    // Projectiles
+    // Projectiles (above enemies)
     this.projectiles.draw(ctx, cam);
+
+    // Pickups (above enemies, below player)
+    this._drawPickups(ctx, cam);
 
     // Companions
     for (const c of this.companions) {
       c.draw(ctx, cam);
     }
 
-    // Player
+    // Player (always on top of world)
     this.player.draw(ctx, cam);
 
-    // Pickups
-    this._drawPickups(ctx, cam);
-
-    // Particles (on top)
+    // Hit effects + particles (topmost world layer)
     this.particles.draw(ctx, cam);
+
+    // Panic pulse ring (screen-space effect)
+    this._drawPanicRing(ctx, cam);
 
     // Ultimate cooldown indicator
     if (this.state === 'playing') {
@@ -515,7 +530,7 @@ export class Game {
     const startX = Math.floor(cam.x / gridSize) * gridSize;
     const startY = Math.floor(cam.y / gridSize) * gridSize;
 
-    ctx.strokeStyle = 'rgba(60,50,80,0.15)';
+    ctx.strokeStyle = COLORS.gridLine;
     ctx.lineWidth = 1;
 
     for (let x = startX; x < cam.x + cam.w + gridSize; x += gridSize) {
@@ -835,6 +850,7 @@ export class Game {
       heal: '✚', frenzy_core: '⚡', essence_surge: '✦', rare_token: '★', void_burst: '◈',
       chest: '🎁',
     };
+    const now = performance.now() * 0.004;
     for (const p of this.pickups) {
       if (!cam.isVisible(p.x, p.y, 15)) continue;
       const sx = cam.screenX(p.x);
@@ -844,6 +860,20 @@ export class Game {
 
       // Fade when about to expire
       ctx.globalAlpha = p.life < 3 ? 0.3 + 0.7 * (p.life / 3) : 1;
+
+      // Sparkle ring (cheap rotating dots)
+      const sparkPhase = now * 2 + p.x * 0.01;
+      for (let s = 0; s < 3; s++) {
+        const a = sparkPhase + s * (Math.PI * 2 / 3);
+        const sparkR = p.radius + 5 + Math.sin(now * 3 + s) * 2;
+        const sparkAlpha = Math.sin(now * 4 + s * 2) * 0.3 + 0.4;
+        ctx.globalAlpha *= sparkAlpha;
+        ctx.beginPath();
+        ctx.arc(sx + Math.cos(a) * sparkR, sy + bob + Math.sin(a) * sparkR, 1.2, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+        ctx.globalAlpha = p.life < 3 ? 0.3 + 0.7 * (p.life / 3) : 1;
+      }
 
       ctx.beginPath();
       ctx.arc(sx, sy + bob, p.radius, 0, Math.PI * 2);
@@ -882,10 +912,26 @@ export class Game {
       }
     }
 
-    this.particles.emit(this.player.x, this.player.y, 20, '#c9a0ff', {
+    this.particles.emit(this.player.x, this.player.y, 20, '#ff6d00', {
       speedMin: 100, speedMax: 200, life: 0.35, sizeMin: 2, sizeMax: 4,
     });
     this.camera.applyShake();
+    this._panicRingT = this._panicRingMax; // trigger expanding ring
+  }
+
+  _drawPanicRing(ctx, cam) {
+    if (this._panicRingT <= 0) return;
+    const frac = 1 - this._panicRingT / this._panicRingMax;
+    const radius = this.player.panicRadius * frac;
+    const alpha = (1 - frac) * 0.6;
+    const sx = cam.screenX(this.player.x);
+    const sy = cam.screenY(this.player.y);
+
+    ctx.beginPath();
+    ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255,109,0,${alpha})`;
+    ctx.lineWidth = 3 * (1 - frac) + 1;
+    ctx.stroke();
   }
 
   _drawPanicIndicator(ctx) {

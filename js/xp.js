@@ -2,6 +2,7 @@
 // Swap-and-pop pool, same pattern as particles/projectiles.
 
 import { dist } from './utils.js';
+import { COLORS, GLOW } from './data/colors.js';
 
 const ORB_POOL_SIZE = 200;
 
@@ -99,25 +100,37 @@ export class XPSystem {
   }
 
   draw(ctx, camera) {
-    ctx.shadowColor = '#c9a0ff';
-    ctx.shadowBlur = 8;
+    ctx.shadowColor = COLORS.xpOrbGlow;
+    ctx.shadowBlur = GLOW.xpOrb;
+    const now = performance.now() * 0.004;
 
     for (let i = 0; i < this.count; i++) {
       const orb = this.pool[i];
       if (!camera.isVisible(orb.x, orb.y, 10)) continue;
       const sx = camera.screenX(orb.x);
       const sy = camera.screenY(orb.y);
+      // Gentle bob
+      const bob = Math.sin(now + orb.x * 0.01) * 2;
 
       ctx.beginPath();
-      ctx.arc(sx, sy, orb.radius, 0, Math.PI * 2);
-      ctx.fillStyle = '#9b59b6';
+      ctx.arc(sx, sy + bob, orb.radius, 0, Math.PI * 2);
+      ctx.fillStyle = COLORS.xpOrb;
       ctx.fill();
 
       // Inner highlight
       ctx.beginPath();
-      ctx.arc(sx - 1, sy - 1, orb.radius * 0.4, 0, Math.PI * 2);
+      ctx.arc(sx - 1, sy + bob - 1, orb.radius * 0.4, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
       ctx.fill();
+
+      // Sparkle dot (cheap — just a tiny bright circle that fades in/out)
+      const sparkle = Math.sin(now * 3 + orb.y * 0.02);
+      if (sparkle > 0.7) {
+        ctx.beginPath();
+        ctx.arc(sx + orb.radius * 0.6, sy + bob - orb.radius * 0.5, 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.fill();
+      }
     }
 
     ctx.shadowBlur = 0;

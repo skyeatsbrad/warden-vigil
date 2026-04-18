@@ -2,6 +2,7 @@
 
 import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy } from './data/enemies.js';
 import { weightedPick } from './utils.js';
+import { GLOW } from './data/colors.js';
 
 let _nextEnemyId = 0;
 
@@ -265,28 +266,67 @@ export class EnemySystem {
   }
 
   draw(ctx, camera) {
+    const now = performance.now();
     for (const e of this.enemies) {
       if (!e || e.hp <= 0) continue;
       if (!camera.isVisible(e.x, e.y, e.radius + 20)) continue;
 
-      const sx = camera.screenX(e.x);
-      const sy = camera.screenY(e.y);
+      let sx = camera.screenX(e.x);
+      let sy = camera.screenY(e.y);
 
-      if (e.glow) {
+      // Basic enemies: subtle jitter for unstable feel
+      if (e.tier === 'basic') {
+        sx += (Math.random() - 0.5) * 1.2;
+        sy += (Math.random() - 0.5) * 1.2;
+      }
+
+      // Boss: multi-layer outer shell
+      if (e.tier === 'boss') {
+        const bossPhase = Math.sin(now * 0.003) * 0.2 + 0.3;
+        // Outer shell
         ctx.beginPath();
-        ctx.arc(sx, sy, e.radius + 5, 0, Math.PI * 2);
-        ctx.fillStyle = e.color + '30';
+        ctx.arc(sx, sy, e.radius + 8, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(56,0,107,${bossPhase})`;
         ctx.shadowColor = e.color;
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = GLOW.enemyBoss;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        // Middle ring
+        ctx.beginPath();
+        ctx.arc(sx, sy, e.radius + 4, 0, Math.PI * 2);
+        ctx.strokeStyle = e.color + '60';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      // Elite / miniboss: pulsing glow
+      if (e.glow) {
+        const pulse = e.tier === 'boss' ? 1 :
+          (Math.sin(now * 0.004 + (e.id || 0)) * 0.3 + 0.7);
+        const glowR = e.radius + (e.tier === 'boss' ? 3 : 5);
+        ctx.beginPath();
+        ctx.arc(sx, sy, glowR, 0, Math.PI * 2);
+        ctx.fillStyle = e.color + Math.floor(pulse * 48).toString(16).padStart(2, '0');
+        ctx.shadowColor = e.color;
+        ctx.shadowBlur = e.tier === 'boss' ? GLOW.enemyBoss : GLOW.enemyElite;
         ctx.fill();
         ctx.shadowBlur = 0;
       }
 
+      // Main body
       ctx.beginPath();
       ctx.arc(sx, sy, e.radius, 0, Math.PI * 2);
       ctx.fillStyle = e.hitFlash > 0 ? '#fff' : e.color;
       ctx.fill();
 
+      // Elite/boss outline for readability
+      if (e.tier === 'elite' || e.tier === 'miniboss') {
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      // Slow debuff ring
       if (e.slowTimer > 0) {
         ctx.beginPath();
         ctx.arc(sx, sy, e.radius + 2, 0, Math.PI * 2);
@@ -295,6 +335,7 @@ export class EnemySystem {
         ctx.stroke();
       }
 
+      // HP bar for non-basic enemies
       if (e.tier !== 'basic' && e.hp < e.maxHp) {
         const barW = e.radius * 2.5;
         const barH = 3;

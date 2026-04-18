@@ -3,8 +3,10 @@
 // (hitIds Sets are cleared and reused, not recreated).
 
 import { dist, angle } from './utils.js';
+import { TRAIL, GLOW } from './data/colors.js';
 
 const PROJ_POOL_SIZE = 300;
+const TRAIL_LEN = TRAIL.projectileLen;
 
 function _createProjectile() {
   return {
@@ -17,6 +19,10 @@ function _createProjectile() {
     chain: 0, chainRange: 0,
     mark: false, overload: false,
     sourceId: -1,
+    // Trail: fixed-size ring buffer of past positions
+    trail: new Float32Array(TRAIL_LEN * 2),
+    trailIdx: 0,
+    trailFill: 0,
   };
 }
 
@@ -40,6 +46,8 @@ export class ProjectileSystem {
     p.ricochet = false;
     p.volatileMark = false;
     p.sourceId = -1;
+    p.trailIdx = 0;
+    p.trailFill = 0;
     return p;
   }
 
@@ -183,6 +191,15 @@ export class ProjectileSystem {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
 
+      // Record trail position (ring buffer, every other frame to save cost)
+      if ((p.trailFill & 1) === 0 || p.trailFill < TRAIL_LEN) {
+        const ti = p.trailIdx * 2;
+        p.trail[ti] = p.x;
+        p.trail[ti + 1] = p.y;
+        p.trailIdx = (p.trailIdx + 1) % TRAIL_LEN;
+        if (p.trailFill < TRAIL_LEN) p.trailFill++;
+      }
+
       if (p.age > p.lifetime) {
         this._kill(i);
         continue;
@@ -300,7 +317,36 @@ export class ProjectileSystem {
   }
 
   draw(ctx, camera) {
-    ctx.shadowBlur = 6;
+    const fadeBase = TRAIL.projectileFade;
+
+    // Trail pass (drawn before heads so heads are on top)
+    ctx.shadowBlur = 0;
+    for (let i = 0; i < this.count; i++) {
+      const p = this.pool[i];
+      if (p.trailFill < 2) continue;
+      if (!camera.isVisible(p.x, p.y, 30)) continue;
+
+      const len = p.trailFill;
+      for (let j = 0; j < len; j++) {
+        // Read oldest first
+        const idx = ((p.trailIdx - len + j + TRAIL_LEN) % TRAIL_LEN) * 2;
+        const tx = p.trail[idx];
+        const ty = p.trail[idx + 1];
+        const frac = j / len;  // 0=oldest, 1=newest
+        const alpha = frac * fadeBase;
+        const r = p.radius * (0.3 + frac * 0.5);
+
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.arc(camera.screenX(tx), camera.screenY(ty), r, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // Head pass with glow
+    ctx.shadowBlur = GLOW.projectile;
     for (let i = 0; i < this.count; i++) {
       const p = this.pool[i];
       if (!camera.isVisible(p.x, p.y)) continue;

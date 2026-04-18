@@ -2,6 +2,7 @@
 
 import { COMPANION_DEFS, getCompanionStats, MODIFIERS, EVOLUTIONS } from './data/companions.js';
 import { dist, angle } from './utils.js';
+import { GLOW } from './data/colors.js';
 
 let _nextId = 0;
 
@@ -378,6 +379,40 @@ export class Companion {
     return nearest;
   }
 
+  // Aura effects drawn below enemies (separate z-layer)
+  drawAura(ctx, camera) {
+    if (!camera.isVisible(this.x, this.y, this.stats.range + 20)) return;
+    const sx = camera.screenX(this.x);
+    const sy = camera.screenY(this.y);
+    const color = this.color;
+
+    // Aura pulse effect
+    if (this._auraPulseEnd && performance.now() < this._auraPulseEnd) {
+      const remaining = (this._auraPulseEnd - performance.now()) / 500;
+      const pulseR = this.stats.range * (1 - remaining * 0.3);
+      // Telegraph: expanding ring before damage
+      ctx.beginPath();
+      ctx.arc(sx, sy, pulseR, 0, Math.PI * 2);
+      ctx.strokeStyle = color + Math.floor(remaining * 80).toString(16).padStart(2, '0');
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      // Faint fill for area telegraph
+      ctx.beginPath();
+      ctx.arc(sx, sy, pulseR, 0, Math.PI * 2);
+      ctx.fillStyle = color + '08';
+      ctx.fill();
+    }
+
+    // Aura-type companion: persistent faint range circle
+    if (this.def.attack === 'aura') {
+      ctx.beginPath();
+      ctx.arc(sx, sy, this.stats.range, 0, Math.PI * 2);
+      ctx.strokeStyle = color + '18';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+
   draw(ctx, camera) {
     if (!camera.isVisible(this.x, this.y, 20)) return;
     const sx = camera.screenX(this.x);
@@ -387,22 +422,12 @@ export class Companion {
     const icon = this.evolutionDef ? this.evolutionDef.icon : this.def.icon;
     const color = this.color;
 
-    // Aura pulse effect
-    if (this._auraPulseEnd && performance.now() < this._auraPulseEnd) {
-      const remaining = (this._auraPulseEnd - performance.now()) / 500;
-      ctx.beginPath();
-      ctx.arc(sx, sy, this.stats.range * (1 - remaining * 0.3), 0, Math.PI * 2);
-      ctx.strokeStyle = color + Math.floor(remaining * 80).toString(16).padStart(2, '0');
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-
     // Body glow
     ctx.beginPath();
     ctx.arc(sx, sy, this.stats.radius + 2, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.shadowColor = color;
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = GLOW.ally;
     ctx.globalAlpha = 0.4;
     ctx.fill();
     ctx.globalAlpha = 1;
@@ -437,7 +462,7 @@ export class Companion {
         ctx.strokeStyle = color;
         ctx.lineWidth = 3;
         ctx.shadowColor = color;
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = GLOW.ally;
         for (const t of targets) {
           ctx.beginPath();
           ctx.moveTo(bsx, bsy);
