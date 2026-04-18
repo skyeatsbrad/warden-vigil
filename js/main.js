@@ -6,21 +6,28 @@ import { Input } from './input.js';
 const canvas = document.getElementById('game');
 const joystickCanvas = document.getElementById('joystick');
 
-// Touch debug mode: ?touchdebug in URL, or triple-tap title to toggle on device
+// Touch debug mode: ?touchdebug in URL, or 3-finger tap anywhere to toggle on device
 if (new URLSearchParams(window.location.search).has('touchdebug')) {
   document.body.classList.add('touch-debug');
 }
-let _debugTaps = 0, _debugTimer = 0;
-document.getElementById('title-screen').addEventListener('pointerdown', () => {
-  const now = Date.now();
-  if (now - _debugTimer > 800) _debugTaps = 0;
-  _debugTimer = now;
-  _debugTaps++;
-  if (_debugTaps >= 3) {
-    document.body.classList.toggle('touch-debug');
-    _debugTaps = 0;
+document.addEventListener('touchstart', (e) => {
+  if (e.touches.length >= 3) {
+    const on = document.body.classList.toggle('touch-debug');
+    // Brief flash to confirm activation
+    const tag = document.createElement('div');
+    tag.textContent = on ? 'TOUCH DEBUG ON' : 'TOUCH DEBUG OFF';
+    Object.assign(tag.style, {
+      position: 'fixed', top: '50%', left: '50%',
+      transform: 'translate(-50%,-50%)',
+      background: 'rgba(0,0,0,0.8)', color: on ? 'lime' : 'red',
+      padding: '12px 24px', borderRadius: '8px',
+      fontSize: '18px', fontWeight: 'bold', zIndex: '9999',
+      pointerEvents: 'none'
+    });
+    document.body.appendChild(tag);
+    setTimeout(() => tag.remove(), 1200);
   }
-});
+}, { passive: true });
 
 // Input
 const input = new Input(joystickCanvas);
