@@ -23,6 +23,10 @@ export class Game {
 
     this.state = 'title'; // title | playing | upgrading | gameover
     this.elapsed = 0;
+    this._isMobile = false;
+    this._safeTop = 0;
+    this._safeBottom = 0;
+    this._safeRight = 0;
 
     this.camera = new Camera(canvas.width, canvas.height);
     this.player = null;
@@ -584,8 +588,10 @@ export class Game {
     const def = COMPANION_DEFS[this.selectedStarter];
     if (!def || !def.ultimate) return;
 
-    const x = this.canvas.width - 70;
-    const y = this.canvas.height - 70;
+    const safeB = this._safeBottom || 0;
+    const safeR = this._safeRight || 0;
+    const x = this.canvas.width - 70 - safeR;
+    const y = this.canvas.height - 70 - safeB;
     const r = 24;
     const ready = this.ultimateCooldown <= 0;
 
@@ -616,7 +622,7 @@ export class Game {
     ctx.fillText(ready ? 'ULT' : Math.ceil(this.ultimateCooldown).toString(), x, y);
 
     ctx.font = '8px monospace';
-    ctx.fillText('[SPACE]', x, y + r + 10);
+    if (!this._isMobile) ctx.fillText('[SPACE]', x, y + r + 10);
     ctx.restore();
   }
 
@@ -1016,8 +1022,10 @@ export class Game {
   }
 
   _drawPanicIndicator(ctx) {
-    const x = this.canvas.width - 70;
-    const y = this.canvas.height - 120;
+    const safeB = this._safeBottom || 0;
+    const safeR = this._safeRight || 0;
+    const x = this.canvas.width - 70 - safeR;
+    const y = this.canvas.height - 120 - safeB;
     const r = 18;
     const ready = this.player.panicCooldown <= 0;
 
@@ -1046,14 +1054,15 @@ export class Game {
     ctx.textBaseline = 'middle';
     ctx.fillText(ready ? 'PANIC' : Math.ceil(this.player.panicCooldown).toString(), x, y);
     ctx.font = '7px monospace';
-    ctx.fillText('[Q]', x, y + r + 8);
+    if (!this._isMobile) ctx.fillText('[Q]', x, y + r + 8);
     ctx.restore();
   }
 
   _drawMomentumMeter(ctx) {
     if (this._momentum < 1) return; // Don't draw when inactive
+    const safeB = this._safeBottom || 0;
     const x = 20;
-    const y = this.canvas.height - 60;
+    const y = this.canvas.height - 60 - safeB;
     const w = 80;
     const h = 8;
     const tier = this._momentumTier;
@@ -1108,7 +1117,7 @@ export class Game {
       ctx.font = 'bold 14px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillText(`⚠ SURGE ${Math.ceil(this._surgeRemaining)}s`, this.canvas.width / 2, 50);
+      ctx.fillText(`⚠ SURGE ${Math.ceil(this._surgeRemaining)}s`, this.canvas.width / 2, 50 + (this._safeTop || 0));
     }
   }
 
@@ -1212,5 +1221,10 @@ export class Game {
 
   resize(w, h) {
     this.camera.resize(w, h);
+    // Detect touch/mobile for layout adjustments
+    this._isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    this._safeTop = this._isMobile ? Math.max(20, Math.round(h * 0.04)) : 0;
+    this._safeBottom = this._isMobile ? Math.max(20, Math.round(h * 0.03)) : 0;
+    this._safeRight = this._isMobile ? 16 : 0;
   }
 }

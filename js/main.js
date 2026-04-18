@@ -20,6 +20,7 @@ function resize() {
 }
 
 window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 150));
 resize();
 
 // ── Game loop ──
