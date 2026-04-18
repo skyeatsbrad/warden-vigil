@@ -140,9 +140,11 @@ export class Game {
     // Ultimate ability (spacebar / touch button)
     window.addEventListener('keydown', e => {
       if (e.key === ' ' && this.state === 'playing' && this.ultimateCooldown <= 0) {
+        e.preventDefault();
         this._useUltimate();
       }
       if ((e.key === 'q' || e.key === 'Q') && this.state === 'playing') {
+        e.preventDefault();
         this._usePanic();
       }
     });
