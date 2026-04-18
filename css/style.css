@@ -292,74 +292,51 @@ canvas#joystick {
   cursor: not-allowed;
 }
 
-/* Panic touch button */
-#panic-btn {
+/* ── Action Button Cluster ── */
+#action-cluster {
   display: none;
   position: absolute;
-  bottom: 90px;
-  right: 24px;
+  bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+  right: calc(14px + env(safe-area-inset-right, 0px));
   z-index: 30;
-  width: 64px;
-  height: 64px;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  pointer-events: none;
+}
+
+@media (pointer: coarse) {
+  #action-cluster { display: flex; }
+}
+
+#action-cluster button {
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  outline: 8px solid transparent;
+}
+
+#panic-btn {
   border: 2px solid #7ec8e3;
   background: rgba(100,200,255,0.3);
   color: #7ec8e3;
-  font-size: 11px;
-  font-weight: bold;
-  cursor: pointer;
-  pointer-events: auto;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  padding: 0;
-  box-sizing: content-box;
-}
-@media (pointer: coarse) {
-  #panic-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 72px;
-    height: 72px;
-    font-size: 12px;
-    bottom: calc(186px + env(safe-area-inset-bottom, 0px));
-    right: calc(14px + env(safe-area-inset-right, 0px));
-    outline: 8px solid transparent;
-  }
-  #ult-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 72px;
-    height: 72px;
-    font-size: 13px;
-    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
-    right: calc(14px + env(safe-area-inset-right, 0px));
-    outline: 8px solid transparent;
-  }
 }
 
-/* Ultimate touch button */
 #ult-btn {
-  display: none;
-  position: absolute;
-  bottom: 24px;
-  right: 24px;
-  z-index: 30;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
   border: 2px solid #c9a0ff;
   background: rgba(150,100,255,0.3);
   color: #c9a0ff;
-  font-size: 11px;
-  font-weight: bold;
-  cursor: pointer;
-  pointer-events: auto;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  padding: 0;
-  box-sizing: content-box;
+  font-size: 13px;
 }
 
 /* ── Title Screen ── */
@@ -551,10 +528,12 @@ canvas#joystick {
 }
 
 /* ── Touch Debug Mode ── */
-body.touch-debug #panic-btn,
-body.touch-debug #ult-btn {
+body.touch-debug #action-cluster button {
   background: rgba(255,0,0,0.35) !important;
   border: 3px dashed yellow !important;
+}
+body.touch-debug #action-cluster {
+  outline: 2px dashed orange;
 }
 body.touch-debug #touch-controls {
   outline: 3px dashed lime;
