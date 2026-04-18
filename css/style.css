@@ -311,7 +311,6 @@ canvas#joystick {
   pointer-events: auto;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  /* Invisible padding extends hit area beyond visible circle */
   padding: 0;
   box-sizing: content-box;
 }
@@ -320,18 +319,22 @@ canvas#joystick {
     display: flex;
     align-items: center;
     justify-content: center;
-    bottom: calc(160px + env(safe-area-inset-bottom, 0px));
-    right: calc(16px + env(safe-area-inset-right, 0px));
-    /* 8px invisible border extends touch target to ~80px */
-    border-width: 2px;
+    width: 72px;
+    height: 72px;
+    font-size: 12px;
+    bottom: calc(186px + env(safe-area-inset-bottom, 0px));
+    right: calc(14px + env(safe-area-inset-right, 0px));
     outline: 8px solid transparent;
   }
   #ult-btn {
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 72px;
+    height: 72px;
+    font-size: 13px;
     bottom: calc(56px + env(safe-area-inset-bottom, 0px));
-    right: calc(16px + env(safe-area-inset-right, 0px));
+    right: calc(14px + env(safe-area-inset-right, 0px));
     outline: 8px solid transparent;
   }
 }
