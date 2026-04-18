@@ -1,6 +1,7 @@
 // ── Collision & damage ──
 
 import { dist } from './utils.js';
+import { COLORS } from './data/colors.js';
 
 export function processCollisions(player, enemies, particles, camera, grid) {
   // Use grid to check only nearby enemies instead of scanning all
@@ -21,8 +22,8 @@ export function processCollisions(player, enemies, particles, camera, grid) {
 
       const dmg = player.takeDamage(e.damage);
       if (dmg > 0) {
-        particles.emit(player.x, player.y, 6, '#e74c3c', { speedMax: 100, life: 0.3 });
-        particles.text(player.x, player.y - player.radius - 10, dmg.toString(), '#e74c3c');
+        particles.emit(player.x, player.y, 6, COLORS.danger, { speedMax: 100, life: 0.3 });
+        particles.text(player.x, player.y - player.radius - 10, dmg.toString(), COLORS.danger);
         camera.applyShake();
       }
     }
@@ -54,8 +55,10 @@ export function handleProjectileHit(enemy, projectile, particles) {
     enemy.slowTimer = Math.max(enemy.slowTimer || 0, 1.5);
   }
 
-  particles.emit(enemy.x, enemy.y, 3, projectile.color || '#fff', { speedMax: 60, life: 0.2 });
-  particles.text(enemy.x, enemy.y - enemy.radius, dmg.toString(), projectile.color || '#fff');
+  // Hit feedback: use projectile color (cyan/blue = yours)
+  const hitColor = projectile.color || COLORS.damage;
+  particles.emit(enemy.x, enemy.y, 3, hitColor, { speedMax: 60, life: 0.2 });
+  particles.text(enemy.x, enemy.y - enemy.radius, dmg.toString(), hitColor);
 
   return actualDmg;
 }

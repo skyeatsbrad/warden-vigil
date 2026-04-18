@@ -23,6 +23,8 @@ function _createProjectile() {
     trail: new Float32Array(TRAIL_LEN * 2),
     trailIdx: 0,
     trailFill: 0,
+    // Chain lightning visual: origin of this chain segment
+    chainFromX: 0, chainFromY: 0, isChainBounce: false,
   };
 }
 
@@ -48,6 +50,9 @@ export class ProjectileSystem {
     p.sourceId = -1;
     p.trailIdx = 0;
     p.trailFill = 0;
+    p.isChainBounce = false;
+    p.chainFromX = 0;
+    p.chainFromY = 0;
     return p;
   }
 
@@ -264,6 +269,9 @@ export class ProjectileSystem {
               cp.overload = p.overload;
               cp.volatileMark = p.volatileMark;
               cp.sourceId = p.sourceId;
+              cp.isChainBounce = true;
+              cp.chainFromX = enemy.x;
+              cp.chainFromY = enemy.y;
               // Copy parent hitIds so chain doesn't re-hit
               for (const id of p.hitIds) cp.hitIds.add(id);
             }
@@ -319,7 +327,41 @@ export class ProjectileSystem {
   draw(ctx, camera) {
     const fadeBase = TRAIL.projectileFade;
 
-    // Trail pass (drawn before heads so heads are on top)
+    // ── Chain lightning lines (jagged, flickering) ──
+    for (let i = 0; i < this.count; i++) {
+      const p = this.pool[i];
+      if (!p.isChainBounce) continue;
+      if (!camera.isVisible(p.x, p.y, 60)) continue;
+      if (p.age > 0.15) continue; // only show briefly
+
+      const sx = camera.screenX(p.chainFromX);
+      const sy = camera.screenY(p.chainFromY);
+      const ex = camera.screenX(p.x);
+      const ey = camera.screenY(p.y);
+
+      // Jagged lightning: 3 segments with random offsets
+      const dx = ex - sx, dy = ey - sy;
+      const segs = 3;
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = 2;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = GLOW.projectile;
+      ctx.globalAlpha = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      for (let s = 1; s < segs; s++) {
+        const t = s / segs;
+        const jx = (Math.random() - 0.5) * 12;
+        const jy = (Math.random() - 0.5) * 12;
+        ctx.lineTo(sx + dx * t + jx, sy + dy * t + jy);
+      }
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Trail pass (drawn before heads so heads are on top) ──
     ctx.shadowBlur = 0;
     for (let i = 0; i < this.count; i++) {
       const p = this.pool[i];
@@ -328,11 +370,10 @@ export class ProjectileSystem {
 
       const len = p.trailFill;
       for (let j = 0; j < len; j++) {
-        // Read oldest first
         const idx = ((p.trailIdx - len + j + TRAIL_LEN) % TRAIL_LEN) * 2;
         const tx = p.trail[idx];
         const ty = p.trail[idx + 1];
-        const frac = j / len;  // 0=oldest, 1=newest
+        const frac = j / len;
         const alpha = frac * fadeBase;
         const r = p.radius * (0.3 + frac * 0.5);
 
@@ -345,7 +386,7 @@ export class ProjectileSystem {
     }
     ctx.globalAlpha = 1;
 
-    // Head pass with glow
+    // ── Head pass with glow ──
     ctx.shadowBlur = GLOW.projectile;
     for (let i = 0; i < this.count; i++) {
       const p = this.pool[i];

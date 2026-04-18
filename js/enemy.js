@@ -316,14 +316,41 @@ export class EnemySystem {
       // Main body
       ctx.beginPath();
       ctx.arc(sx, sy, e.radius, 0, Math.PI * 2);
-      ctx.fillStyle = e.hitFlash > 0 ? '#fff' : e.color;
-      ctx.fill();
+      if (e.hitFlash > 0) {
+        // Stronger hit flash: white fill with brief glow halo
+        ctx.fillStyle = '#fff';
+        ctx.shadowColor = '#fff';
+        ctx.shadowBlur = GLOW.hit;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      } else {
+        ctx.fillStyle = e.color;
+        ctx.fill();
+      }
 
       // Elite/boss outline for readability
       if (e.tier === 'elite' || e.tier === 'miniboss') {
-        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
         ctx.lineWidth = 1;
         ctx.stroke();
+      }
+
+      // Volatile mark indicator (skull-like dot pattern)
+      if (e.volatileMarked) {
+        ctx.fillStyle = 'rgba(255,68,68,0.7)';
+        ctx.beginPath();
+        ctx.arc(sx, sy - e.radius - 4, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Static mark stacks indicator
+      if (e.marked && e.marked > 0) {
+        for (let m = 0; m < Math.min(e.marked, 3); m++) {
+          ctx.fillStyle = 'rgba(0,229,255,0.8)';
+          ctx.beginPath();
+          ctx.arc(sx - 4 + m * 4, sy + e.radius + 4, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
       // Slow debuff ring

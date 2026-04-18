@@ -2,7 +2,9 @@
 
 import { COMPANION_DEFS, getCompanionStats, MODIFIERS, EVOLUTIONS } from './data/companions.js';
 import { dist, angle } from './utils.js';
-import { GLOW } from './data/colors.js';
+import { GLOW, TRAIL } from './data/colors.js';
+
+const ORBIT_TRAIL_LEN = TRAIL.orbitLen;
 
 let _nextId = 0;
 
@@ -24,6 +26,12 @@ export class Companion {
     this.stats = getCompanionStats(this.def.baseStats, 1);
     this._phase = Math.random() * Math.PI * 2; // visual variety
     this._totalDamage = 0; // run damage tracking
+
+    // Orbit trail ring buffer
+    this._orbitTrail = new Float32Array(ORBIT_TRAIL_LEN * 2);
+    this._orbitTrailIdx = 0;
+    this._orbitTrailFill = 0;
+    this._orbitTrailTimer = 0;
   }
 
   /** Active display color (uses evolution color if evolved) */
@@ -117,6 +125,17 @@ export class Companion {
           this.orbitAngle += orbSpd * dt;
           this.x = player.x + Math.cos(this.orbitAngle) * orbDist;
           this.y = player.y + Math.sin(this.orbitAngle) * orbDist;
+
+          // Record orbit trail position
+          this._orbitTrailTimer -= dt;
+          if (this._orbitTrailTimer <= 0) {
+            this._orbitTrailTimer = 0.03; // ~33 fps trail recording
+            const ti = this._orbitTrailIdx * 2;
+            this._orbitTrail[ti] = this.x;
+            this._orbitTrail[ti + 1] = this.y;
+            this._orbitTrailIdx = (this._orbitTrailIdx + 1) % ORBIT_TRAIL_LEN;
+            if (this._orbitTrailFill < ORBIT_TRAIL_LEN) this._orbitTrailFill++;
+          }
         }
         break;
 
@@ -422,6 +441,26 @@ export class Companion {
     const icon = this.evolutionDef ? this.evolutionDef.icon : this.def.icon;
     const color = this.color;
 
+    // ── Orbit trail arc (behind body) ──
+    if (this.def.behavior === 'orbit' && this._orbitTrailFill >= 2) {
+      const len = this._orbitTrailFill;
+      for (let j = 0; j < len; j++) {
+        const idx = ((this._orbitTrailIdx - len + j + ORBIT_TRAIL_LEN) % ORBIT_TRAIL_LEN) * 2;
+        const tx = this._orbitTrail[idx];
+        const ty = this._orbitTrail[idx + 1];
+        const frac = j / len;
+        const alpha = frac * 0.35;
+        const r = this.stats.radius * (0.2 + frac * 0.4);
+
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.arc(camera.screenX(tx), camera.screenY(ty), r, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
     // Body glow
     ctx.beginPath();
     ctx.arc(sx, sy, this.stats.radius + 2, 0, Math.PI * 2);
@@ -453,15 +492,29 @@ export class Companion {
       ctx.fillText(this.level.toString(), sx + this.stats.radius + 2, sy - this.stats.radius);
     }
 
-    // Beam effect — supports fork_beam multi-target
+    // Beam effect — pulsing width with glow segments
     if (this._beamEndTime && performance.now() < this._beamEndTime) {
       const targets = this._beamTargets || (this._beamTarget ? [this._beamTarget] : []);
       if (targets.length > 0) {
         const bsx = camera.screenX(this.x);
         const bsy = camera.screenY(this.y);
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 3;
+        const beamAge = 1 - (this._beamEndTime - performance.now()) / 150;
+        const pulse = 1 + Math.sin(beamAge * Math.PI) * 0.5; // swell then shrink
+
+        // Outer glow pass
+        ctx.strokeStyle = color + '40';
+        ctx.lineWidth = (5 + pulse * 2);
         ctx.shadowColor = color;
+        ctx.shadowBlur = GLOW.ally + 4;
+        for (const t of targets) {
+          ctx.beginPath();
+          ctx.moveTo(bsx, bsy);
+          ctx.lineTo(camera.screenX(t.x), camera.screenY(t.y));
+          ctx.stroke();
+        }
+        // Inner bright core
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2 + pulse;
         ctx.shadowBlur = GLOW.ally;
         for (const t of targets) {
           ctx.beginPath();

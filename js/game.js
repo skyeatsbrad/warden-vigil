@@ -87,6 +87,13 @@ export class Game {
     this._panicRingT = 0;   // 0 = inactive, >0 = expanding
     this._panicRingMax = 0.35;
 
+    // Death ring effects (expanding circles on kill)
+    this._deathRings = [];
+
+    // Ultimate bloom effect
+    this._ultBloomT = 0;
+    this._ultBloomMax = 0.5;
+
     // Frame pressure tracking for adaptive quality
     this._smoothedDt = 0.016;
     this._targetDt = 1 / 60;
@@ -198,6 +205,8 @@ export class Game {
     this._curseDrainAccum = 0;
     this._totalDamageDealt = 0;
     this._panicRingT = 0;
+    this._deathRings = [];
+    this._ultBloomT = 0;
     this.ui._pickedTradeoffs = new Set();
     this.camera.reset(0, 0);
 
@@ -284,6 +293,15 @@ export class Game {
     }
     if (this._surgeWarningTime > 0) this._surgeWarningTime -= dt;
     if (this._panicRingT > 0) this._panicRingT -= dt;
+    if (this._ultBloomT > 0) this._ultBloomT -= dt;
+
+    // Tick death rings
+    for (let i = this._deathRings.length - 1; i >= 0; i--) {
+      this._deathRings[i].t += dt;
+      if (this._deathRings[i].t >= this._deathRings[i].maxT) {
+        this._deathRings.splice(i, 1);
+      }
+    }
 
     // Apply curse spawn rate multiplier
     if (this._curseSpawnMult !== 1) {
@@ -349,6 +367,13 @@ export class Game {
         const isElite = e.tier === 'elite' || e.tier === 'miniboss' || e.tier === 'boss';
         const particleCount = isElite ? 20 : 10;
         this.particles.emit(e.x, e.y, particleCount, e.color, { speedMax: isElite ? 160 : 100, life: isElite ? 0.6 : 0.4 });
+
+        // Death ring: expanding circle on kill for satisfying feedback
+        // Death ring: expanding circle on kill (capped at 8 for perf)
+        if (this._deathRings.length < 8) {
+          this._deathRings.push({ x: e.x, y: e.y, t: 0, maxT: isElite ? 0.4 : 0.25, maxR: e.radius * (isElite ? 4 : 2.5), color: e.color });
+        }
+
         if (isElite) {
           this.camera.applyShake();
           this._spawnPickup(e.x, e.y);
@@ -510,8 +535,14 @@ export class Game {
     // Hit effects + particles (topmost world layer)
     this.particles.draw(ctx, cam);
 
+    // Death rings (expanding kill feedback)
+    this._drawDeathRings(ctx, cam);
+
     // Panic pulse ring (screen-space effect)
     this._drawPanicRing(ctx, cam);
+
+    // Ultimate bloom overlay
+    this._drawUltBloom(ctx);
 
     // Ultimate cooldown indicator
     if (this.state === 'playing') {
@@ -593,6 +624,8 @@ export class Game {
     const def = COMPANION_DEFS[this.selectedStarter];
     if (!def || !def.ultimate) return;
     this.ultimateCooldown = def.ultimate.cooldown;
+    this._ultBloomT = this._ultBloomMax; // screen-dominant bloom
+    this.camera.applyShake();
 
     const enemies = this.enemySystem.enemies;
 
@@ -927,10 +960,58 @@ export class Game {
     const sx = cam.screenX(this.player.x);
     const sy = cam.screenY(this.player.y);
 
+    // Brief background desaturate during panic
+    if (frac < 0.4) {
+      ctx.fillStyle = `rgba(0,0,0,${0.15 * (1 - frac / 0.4)})`;
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+
     ctx.beginPath();
     ctx.arc(sx, sy, radius, 0, Math.PI * 2);
     ctx.strokeStyle = `rgba(255,109,0,${alpha})`;
     ctx.lineWidth = 3 * (1 - frac) + 1;
+    ctx.stroke();
+  }
+
+  _drawDeathRings(ctx, cam) {
+    for (const ring of this._deathRings) {
+      const frac = ring.t / ring.maxT;
+      const radius = ring.maxR * frac;
+      const alpha = (1 - frac) * 0.5;
+      const sx = cam.screenX(ring.x);
+      const sy = cam.screenY(ring.y);
+
+      ctx.beginPath();
+      ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = ring.color;
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = 2 * (1 - frac) + 0.5;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  _drawUltBloom(ctx) {
+    if (this._ultBloomT <= 0) return;
+    const frac = 1 - this._ultBloomT / this._ultBloomMax;
+
+    // Background dim
+    if (frac < 0.3) {
+      ctx.fillStyle = `rgba(0,0,0,${0.2 * (1 - frac / 0.3)})`;
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+
+    // White radial bloom from center
+    const cx = this.canvas.width / 2;
+    const cy = this.canvas.height / 2;
+    const maxR = Math.max(this.canvas.width, this.canvas.height) * 0.6;
+    const radius = maxR * frac;
+    const alpha = (1 - frac) * 0.35;
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+    ctx.lineWidth = 6 * (1 - frac);
     ctx.stroke();
   }
 
