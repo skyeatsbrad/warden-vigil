@@ -480,31 +480,40 @@ canvas#joystick {
 
 /* ── Mobile Portrait Responsive ── */
 @media (pointer: coarse) and (max-width: 600px) {
-  /* HUD: more breathing room at top */
   #hud {
-    padding-top: calc(14px + env(safe-area-inset-top, 0px));
-    padding-left: calc(8px + env(safe-area-inset-left, 0px));
-    padding-right: calc(8px + env(safe-area-inset-right, 0px));
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+    padding-left: calc(10px + env(safe-area-inset-left, 0px));
+    padding-right: calc(10px + env(safe-area-inset-right, 0px));
   }
 
-  #hud-top { gap: 8px; }
-
-  #hud-stats {
-    gap: 6px;
-    font-size: 11px;
-    flex-shrink: 0;
-    white-space: nowrap;
+  /* Reflow HUD: XP bar full width on top row, HP + stats on second row */
+  #hud-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 5px;
+    margin-bottom: 0;
   }
 
   #xp-bar-container {
-    max-width: 50%;
-    height: 14px;
-    min-width: 0;
+    max-width: 100%;
+    height: 16px;
   }
-  #xp-text { font-size: 9px; line-height: 14px; }
+  #xp-text { font-size: 10px; line-height: 16px; }
 
-  #hp-bar-container { width: 100px; height: 7px; }
-  #hp-text { font-size: 7px; line-height: 9px; }
+  #hud-stats {
+    gap: 10px;
+    font-size: 12px;
+    justify-content: flex-end;
+  }
+
+  /* HP bar sits in the stats row on mobile */
+  #hp-bar-container {
+    width: 100%;
+    max-width: 140px;
+    height: 8px;
+    margin-top: 2px;
+  }
+  #hp-text { font-size: 8px; line-height: 10px; }
 
   /* Upgrade modal: respect safe areas, smaller cards */
   #upgrade-modal {
