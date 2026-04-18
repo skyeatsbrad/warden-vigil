@@ -50,47 +50,32 @@ export class Input {
 
   _bindTouch() {
     const c = this.joystickCanvas;
-    c.addEventListener('touchstart', e => this._onTouchStart(e), { passive: false });
-    c.addEventListener('touchmove', e => this._onTouchMove(e), { passive: false });
-    c.addEventListener('touchend', e => this._onTouchEnd(e), { passive: false });
-    c.addEventListener('touchcancel', e => this._onTouchEnd(e), { passive: false });
+    c.style.touchAction = 'none'; // prevent browser gestures on joystick
+    c.addEventListener('pointerdown', e => this._onPointerDown(e));
+    c.addEventListener('pointermove', e => this._onPointerMove(e));
+    c.addEventListener('pointerup', e => this._onPointerUp(e));
+    c.addEventListener('pointercancel', e => this._onPointerUp(e));
   }
 
-  _getTouchPos(e) {
-    const rect = this.joystickCanvas.getBoundingClientRect();
-    for (const t of e.changedTouches) {
-      if (this.touchId === null || t.identifier === this.touchId) {
-        return {
-          id: t.identifier,
-          x: t.clientX - rect.left,
-          y: t.clientY - rect.top,
-        };
-      }
-    }
-    return null;
-  }
-
-  _onTouchStart(e) {
-    e.preventDefault();
+  _onPointerDown(e) {
     if (this.touchId !== null) return;
-    const t = this._getTouchPos(e);
-    if (!t) return;
-    this.touchId = t.id;
+    e.preventDefault();
+    this.joystickCanvas.setPointerCapture(e.pointerId);
+    this.touchId = e.pointerId;
     this.joystick.active = true;
-    this._updateJoystick(t.x, t.y);
+    const rect = this.joystickCanvas.getBoundingClientRect();
+    this._updateJoystick(e.clientX - rect.left, e.clientY - rect.top);
   }
 
-  _onTouchMove(e) {
+  _onPointerMove(e) {
+    if (e.pointerId !== this.touchId) return;
     e.preventDefault();
-    const t = this._getTouchPos(e);
-    if (!t) return;
-    this._updateJoystick(t.x, t.y);
+    const rect = this.joystickCanvas.getBoundingClientRect();
+    this._updateJoystick(e.clientX - rect.left, e.clientY - rect.top);
   }
 
-  _onTouchEnd(e) {
-    e.preventDefault();
-    const t = this._getTouchPos(e);
-    if (!t) return;
+  _onPointerUp(e) {
+    if (e.pointerId !== this.touchId) return;
     this.touchId = null;
     this.joystick.active = false;
     this.joystick.dx = 0;
