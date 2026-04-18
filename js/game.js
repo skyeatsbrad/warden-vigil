@@ -504,8 +504,10 @@ export class Game {
     if (this.state === 'title') return;
     if (!this.player) return;
 
-    // Grid background
-    this._drawGrid(ctx, cam);
+    // Grid background — skip on mobile under frame pressure
+    if (!(this._isMobile && this.particles.pressure > 0.5)) {
+      this._drawGrid(ctx, cam);
+    }
 
     // XP orbs (lowest world layer)
     this.xpSystem.draw(ctx, cam);
@@ -571,21 +573,18 @@ export class Game {
 
     ctx.strokeStyle = COLORS.gridLine;
     ctx.lineWidth = 1;
-
+    ctx.beginPath();
     for (let x = startX; x < cam.x + cam.w + gridSize; x += gridSize) {
       const sx = x - cam.x + cam.shakeX;
-      ctx.beginPath();
       ctx.moveTo(sx, 0);
       ctx.lineTo(sx, cam.h);
-      ctx.stroke();
     }
     for (let y = startY; y < cam.y + cam.h + gridSize; y += gridSize) {
       const sy = y - cam.y + cam.shakeY;
-      ctx.beginPath();
       ctx.moveTo(0, sy);
       ctx.lineTo(cam.w, sy);
-      ctx.stroke();
     }
+    ctx.stroke();
   }
 
   _drawUltimateIndicator(ctx) {
