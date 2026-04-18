@@ -23,7 +23,7 @@ export class Game {
 
     this.state = 'title'; // title | playing | upgrading | gameover
     this.elapsed = 0;
-    this._isMobile = false;
+    this._isMobile = (navigator.maxTouchPoints > 0) || ('ontouchstart' in window) || (window.matchMedia('(pointer: coarse)').matches);
     this._safeTop = 0;
     this._safeBottom = 0;
     this._safeRight = 0;
@@ -1257,7 +1257,7 @@ export class Game {
 
   resize(w, h) {
     this.camera.resize(w, h);
-    this._isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    this._isMobile = (navigator.maxTouchPoints > 0) || ('ontouchstart' in window) || (window.matchMedia('(pointer: coarse)').matches);
     this._safeTop = this._isMobile ? Math.max(20, Math.round(h * 0.04)) : 0;
     this._safeBottom = this._isMobile ? Math.max(20, Math.round(h * 0.03)) : 0;
     this._safeRight = this._isMobile ? 16 : 0;
