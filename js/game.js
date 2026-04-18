@@ -53,6 +53,13 @@ export class Game {
     this._pendingEvolution = null;
     this._bioHealTimer = 0;
 
+    // Momentum system
+    this._momentum = 0;
+    this._momentumTier = 0;
+
+    // Void burst pickup
+    this._voidBurstKills = 0;
+
     // Frame pressure tracking for adaptive quality
     this._smoothedDt = 0.016;
     this._targetDt = 1 / 60;
@@ -146,6 +153,9 @@ export class Game {
     this.tradeoffs = { allDamageMult: 1, allCooldownMult: 1, allRangeMult: 1, allPierceAdd: 0 };
     this._pendingEvolution = null;
     this._bioHealTimer = 0;
+    this._momentum = 0;
+    this._momentumTier = 0;
+    this._voidBurstKills = 0;
     this.ui._pickedTradeoffs = new Set();
     this.camera.reset(0, 0);
 
@@ -174,10 +184,24 @@ export class Game {
     // Build spatial grid once per frame
     const grid = new SpatialGrid(this.enemySystem.enemies);
 
-    // Companions
+    // Momentum decay and tier calculation
+    this._momentum = Math.max(0, this._momentum - 2 * dt);
+    const newTier = this._momentum >= 50 ? 3 : this._momentum >= 25 ? 2 : this._momentum >= 10 ? 1 : 0;
+    this._momentumTier = newTier;
+    const momentumDmgMult = newTier >= 2 ? 1.15 : 1;
+
+    // Set momentum damage multiplier on each companion
     for (const c of this.companions) {
+      c._momentumDmgMult = momentumDmgMult;
       c.update(dt, this.player, this.enemySystem.enemies, grid);
       c.attack(this.enemySystem.enemies, this.projectiles, this.particles, grid);
+    }
+
+    // Momentum tier 1: -10% cooldown (extra cooldown reduction)
+    if (newTier >= 1) {
+      for (const c of this.companions) {
+        c.cooldownTimer -= dt * 0.1;
+      }
     }
 
     // Attack speed buff: extra cooldown reduction for all companions
@@ -219,21 +243,61 @@ export class Game {
     }
 
     // Track kills & spawn XP — centralized death handling
+    // Momentum tier 3 bonus: +25 effective magnet radius
+    const magnetBonus = this._momentumTier >= 3 ? 25 : 0;
+
     for (let i = this.enemySystem.enemies.length - 1; i >= 0; i--) {
       const e = this.enemySystem.enemies[i];
       if (e.hp <= 0) {
         this.player.kills++;
+        this._momentum += 1;
         this.xpSystem.spawnFromEnemy(e);
-        this.particles.emit(e.x, e.y, 8, e.color, { speedMax: 100, life: 0.4 });
-        if (e.tier === 'elite' || e.tier === 'miniboss' || e.tier === 'boss') {
+
+        // Enhanced kill particles: elites/bosses get bigger feedback + camera shake
+        const isElite = e.tier === 'elite' || e.tier === 'miniboss' || e.tier === 'boss';
+        const particleCount = isElite ? 20 : 10;
+        this.particles.emit(e.x, e.y, particleCount, e.color, { speedMax: isElite ? 160 : 100, life: isElite ? 0.6 : 0.4 });
+        if (isElite) {
+          this.camera.applyShake();
           this._spawnPickup(e.x, e.y);
         }
+
+        // Void burst: next N kills explode for AoE
+        if (this._voidBurstKills > 0) {
+          this._voidBurstKills--;
+          const burstTargets = grid.query2(e.x, e.y, 80);
+          for (const e2 of burstTargets) {
+            if (e2 === e || e2.hp <= 0) continue;
+            if (dist(e, e2) < 80) {
+              e2.hp -= 15;
+              e2.hitFlash = 0.1;
+            }
+          }
+          this.particles.emit(e.x, e.y, 10, '#8e44ad', { speedMax: 120, life: 0.4 });
+        }
+
+        // Volatile mark: marked enemies explode on death (single-hop, no cascade)
+        if (e.volatileMarked && !e._volatileExploded) {
+          const vmTargets = grid.query2(e.x, e.y, 60);
+          for (const e2 of vmTargets) {
+            if (e2 === e || e2.hp <= 0) continue;
+            if (dist(e, e2) < 60) {
+              e2.hp -= Math.round(e.maxHp * 0.2);
+              e2.hitFlash = 0.12;
+              e2._volatileExploded = true; // prevent cascade
+            }
+          }
+          this.particles.emit(e.x, e.y, 12, '#ff4444', { speedMax: 130, life: 0.4 });
+        }
+
         this.enemySystem.enemies.splice(i, 1);
       }
     }
 
-    // XP collection — returns number of levels gained
+    // XP collection — apply momentum magnet bonus temporarily
+    this.player.magnetRadius += magnetBonus;
     const levelsGained = this.xpSystem.update(dt, this.player);
+    this.player.magnetRadius -= magnetBonus;
     if (levelsGained > 0) {
       this.pendingUpgrades += levelsGained;
       this._showNextUpgrade();
@@ -332,6 +396,7 @@ export class Game {
     if (this.state === 'playing') {
       this._drawUltimateIndicator(ctx);
       this._drawPanicIndicator(ctx);
+      this._drawMomentumMeter(ctx);
     }
 
     // Joystick
@@ -566,8 +631,8 @@ export class Game {
   // ── Pickup system (elite drops) ──
 
   _spawnPickup(x, y) {
-    const types = ['heal', 'attack_speed', 'xp_burst', 'rare_token'];
-    const weights = [30, 25, 30, 15];
+    const types = ['heal', 'frenzy_core', 'essence_surge', 'rare_token', 'void_burst'];
+    const weights = [25, 25, 25, 15, 10];
     const type = weightedPick(types, weights);
     this.pickups.push({ type, x, y, radius: 10, life: 15, age: 0 });
   }
@@ -595,31 +660,37 @@ export class Game {
         this.particles.text(this.player.x, this.player.y - 20, '+25 HP', '#2ecc71');
         this.particles.emit(this.player.x, this.player.y, 8, '#2ecc71', { speedMax: 60, life: 0.4 });
         break;
-      case 'attack_speed':
-        this.attackSpeedBuff = 6;
-        this.particles.text(this.player.x, this.player.y - 20, 'ATK SPEED!', '#f39c12');
-        this.particles.emit(this.player.x, this.player.y, 8, '#f39c12', { speedMax: 60, life: 0.4 });
+      case 'frenzy_core':
+        this.attackSpeedBuff = 8;
+        this.particles.text(this.player.x, this.player.y - 20, 'FRENZY!', '#f39c12');
+        this.particles.emit(this.player.x, this.player.y, 10, '#f39c12', { speedMax: 80, life: 0.5 });
         break;
-      case 'xp_burst':
+      case 'essence_surge':
         this.xpSystem.spawnOrb(this.player.x, this.player.y, 10);
-        this.particles.text(this.player.x, this.player.y - 20, '+10 XP', '#9b59b6');
-        this.particles.emit(this.player.x, this.player.y, 8, '#9b59b6', { speedMax: 60, life: 0.4 });
+        this.player.heal(10);
+        this.particles.text(this.player.x, this.player.y - 20, 'ESSENCE SURGE!', '#9b59b6');
+        this.particles.emit(this.player.x, this.player.y, 10, '#9b59b6', { speedMax: 80, life: 0.5 });
         break;
       case 'rare_token':
         this.guaranteedRare = true;
-        this.particles.text(this.player.x, this.player.y - 20, 'RARE TOKEN!', '#e74c3c');
+        this.particles.text(this.player.x, this.player.y - 20, 'RARE SIGIL!', '#e74c3c');
         this.particles.emit(this.player.x, this.player.y, 12, '#e74c3c', { speedMax: 80, life: 0.5 });
+        break;
+      case 'void_burst':
+        this._voidBurstKills = 5;
+        this.particles.text(this.player.x, this.player.y - 20, 'VOID BURST!', '#8e44ad');
+        this.particles.emit(this.player.x, this.player.y, 15, '#8e44ad', { speedMax: 100, life: 0.6 });
         break;
     }
   }
 
   _drawPickups(ctx, cam) {
     const PICKUP_COLORS = {
-      heal: '#2ecc71', attack_speed: '#f39c12',
-      xp_burst: '#9b59b6', rare_token: '#e74c3c',
+      heal: '#2ecc71', frenzy_core: '#f39c12',
+      essence_surge: '#9b59b6', rare_token: '#e74c3c', void_burst: '#8e44ad',
     };
     const PICKUP_ICONS = {
-      heal: '✚', attack_speed: '⚡', xp_burst: '✦', rare_token: '★',
+      heal: '✚', frenzy_core: '⚡', essence_surge: '✦', rare_token: '★', void_burst: '◈',
     };
     for (const p of this.pickups) {
       if (!cam.isVisible(p.x, p.y, 15)) continue;
@@ -709,7 +780,48 @@ export class Game {
     ctx.restore();
   }
 
-  _gameOver() {
+  _drawMomentumMeter(ctx) {
+    if (this._momentum < 1) return; // Don't draw when inactive
+    const x = 20;
+    const y = this.canvas.height - 60;
+    const w = 80;
+    const h = 8;
+    const tier = this._momentumTier;
+
+    // Bar background
+    ctx.fillStyle = 'rgba(30,25,50,0.6)';
+    ctx.fillRect(x, y, w, h);
+
+    // Fill based on momentum (cap display at 60)
+    const fillPct = Math.min(1, this._momentum / 60);
+    const tierColors = ['#888', '#f39c12', '#e67e22', '#e74c3c'];
+    ctx.fillStyle = tierColors[tier];
+    ctx.fillRect(x, y, w * fillPct, h);
+
+    // Tier threshold marks
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    for (const t of [10, 25, 50]) {
+      const tx = x + (t / 60) * w;
+      ctx.beginPath();
+      ctx.moveTo(tx, y);
+      ctx.lineTo(tx, y + h);
+      ctx.stroke();
+    }
+
+    // Border
+    ctx.strokeStyle = tierColors[tier];
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, w, h);
+
+    // Label
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 8px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    const labels = ['', '⚡SPD', '⚡SPD 🗡DMG', '⚡SPD 🗡DMG ✧MAG'];
+    ctx.fillText(tier > 0 ? labels[tier] : 'MOMENTUM', x, y - 2);
+  }
     this.state = 'gameover';
     this.pendingUpgrades = 0;
 

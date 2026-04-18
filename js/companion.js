@@ -184,6 +184,9 @@ export class Companion {
     const target = this._findNearest(enemies, this.stats.range, grid);
     if (!target && this.def.attack !== 'orbit' && this.def.attack !== 'aura') return;
 
+    // Momentum damage multiplier (set by game.js each frame)
+    const dmgMult = this._momentumDmgMult || 1;
+
     this.cooldownTimer = this.stats.cooldown;
 
     switch (this.def.attack) {
@@ -193,23 +196,27 @@ export class Companion {
           const hasBloom = this.hasEffect('split_bloom');
           const hasDetonate = this.hasEffect('detonate');
           const hasHoming = this.hasEffect('homing');
+          const hasPierce = this.hasEffect('piercing_surge');
+          const hasRicochet = this.hasEffect('ricochet');
           const explR = hasDetonate ? 50 : 0;
+          const pierce = this.stats.pierce + (hasPierce ? 3 : 0);
+          const damage = Math.round(this.stats.damage * dmgMult);
 
           if (hasBloom) {
             for (let i = -1; i <= 1; i++) {
               projectileSystem.spawn(
                 this.x, this.y, a + i * 0.25,
-                this.stats.projectileSpeed, this.stats.damage,
-                this.stats.pierce, this.stats.radius, this.color,
-                { homing: hasHoming, explodeRadius: explR }
+                this.stats.projectileSpeed, damage,
+                pierce, this.stats.radius, this.color,
+                { homing: hasHoming, explodeRadius: explR, ricochet: hasRicochet }
               );
             }
           } else {
             projectileSystem.spawn(
               this.x, this.y, a,
-              this.stats.projectileSpeed, this.stats.damage,
-              this.stats.pierce, this.stats.radius, this.color,
-              { homing: hasHoming, explodeRadius: explR }
+              this.stats.projectileSpeed, damage,
+              pierce, this.stats.radius, this.color,
+              { homing: hasHoming, explodeRadius: explR, ricochet: hasRicochet }
             );
           }
         }
@@ -217,14 +224,27 @@ export class Companion {
 
       case 'melee':
         {
-          const nearby = grid.query(this.x, this.y, this.stats.range + 20);
+          const hasCleave = this.hasEffect('cleave');
+          const hasVampiric = this.hasEffect('vampiric');
+          const hasFrenzy = this.hasEffect('frenzy_strike');
+          const hitRange = this.stats.range * (hasCleave ? 1.8 : 1);
+          const damage = Math.round(this.stats.damage * dmgMult);
+          const nearby = grid.query(this.x, this.y, hitRange + 20);
+          let meleeKills = 0;
           for (const e of nearby) {
-            if (dist(this, e) < this.stats.range + e.radius) {
-              e.hp -= this.stats.damage;
+            if (e.hp <= 0) continue;
+            if (dist(this, e) < hitRange + e.radius) {
+              const wasAlive = e.hp > 0;
+              e.hp -= damage;
               e.hitFlash = 0.1;
+              if (hasVampiric) this.owner.heal(1);
+              if (wasAlive && e.hp <= 0) meleeKills++;
               particles.emit(e.x, e.y, 4, this.color, { speedMax: 80, life: 0.3 });
-              particles.text(e.x, e.y - e.radius, this.stats.damage.toString(), this.color);
+              particles.text(e.x, e.y - e.radius, damage.toString(), this.color);
             }
+          }
+          if (hasFrenzy && meleeKills > 0) {
+            this.cooldownTimer *= 0.5;
           }
         }
         break;
@@ -233,18 +253,27 @@ export class Companion {
         {
           const hasEcho = this.hasEffect('pulse_echo');
           const hasSlowF = this.hasEffect('slow_field');
-          const dmg = hasEcho ? this.stats.damage * 2 : this.stats.damage;
+          const hasGravity = this.hasEffect('gravity_well');
+          const dmg = Math.round((hasEcho ? this.stats.damage * 2 : this.stats.damage) * dmgMult);
           const nearby = grid.query(this.x, this.y, this.stats.range);
           for (const e of nearby) {
-            if (dist(this, e) < this.stats.range) {
+            if (e.hp <= 0) continue;
+            const d = dist(this, e);
+            if (d < this.stats.range) {
               e.hp -= dmg;
               e.hitFlash = 0.1;
               if (hasSlowF) e.slowTimer = Math.max(e.slowTimer || 0, 2.0);
+              // Gravity well: pull enemies toward companion
+              if (hasGravity && d > 20) {
+                const dx = this.x - e.x, dy = this.y - e.y;
+                const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                e.x += (dx / len) * 30;
+                e.y += (dy / len) * 30;
+              }
               particles.text(e.x, e.y - e.radius, dmg.toString(), this.color, 10);
             }
           }
           this._auraPulseEnd = performance.now() + 500;
-          // Heal pulse evolution (Sporeloom: Healing Spores)
           if (this.hasEffect('heal_pulse')) {
             this.owner.heal(3);
           }
@@ -256,31 +285,59 @@ export class Companion {
 
       case 'beam':
         if (target) {
-          const a = angle(this, target);
-          const beamLen = this.stats.range;
-          let hits = 0;
-          const nearby = grid.query(this.x, this.y, beamLen);
-          for (const e of nearby) {
-            if (hits >= this.stats.pierce) break;
-            const dx = e.x - this.x;
-            const dy = e.y - this.y;
-            const proj = dx * Math.cos(a) + dy * Math.sin(a);
-            if (proj < 0 || proj > beamLen) continue;
-            const perpDist = Math.abs(-dx * Math.sin(a) + dy * Math.cos(a));
-            if (perpDist < e.radius + 8) {
-              e.hp -= this.stats.damage;
+          const hasFork = this.hasEffect('fork_beam');
+          const hasBP = this.hasEffect('beam_pierce');
+          const hasSearing = this.hasEffect('searing_lance');
+          const beamDmg = Math.round((hasSearing ? this.stats.damage * 2 : this.stats.damage) * dmgMult);
+          const beamLen = hasSearing ? this.stats.range * 1.5 : this.stats.range;
+          const beamPierce = this.stats.pierce + (hasBP ? 3 : 0);
+
+          const baseAngle = angle(this, target);
+          const angles = [baseAngle];
+          if (hasFork) {
+            angles.push(baseAngle - 0.4, baseAngle + 0.4);
+          }
+
+          // Shared hit set across all fork beams to prevent double-hits
+          const hitIds = new Set();
+          this._beamTargets = [];
+
+          for (const a of angles) {
+            let hits = 0;
+            const cosA = Math.cos(a), sinA = Math.sin(a);
+            const nearby = grid.query(this.x, this.y, beamLen);
+
+            // Sort by projection distance so nearest enemies consume pierce first
+            const candidates = [];
+            for (const e of nearby) {
+              if (e.hp <= 0 || hitIds.has(e)) continue;
+              const dx = e.x - this.x, dy = e.y - this.y;
+              const proj = dx * cosA + dy * sinA;
+              if (proj < 0 || proj > beamLen) continue;
+              const perpDist = Math.abs(-dx * sinA + dy * cosA);
+              if (perpDist < e.radius + 8) {
+                candidates.push({ e, proj });
+              }
+            }
+            candidates.sort((a, b) => a.proj - b.proj);
+
+            for (const { e } of candidates) {
+              if (hits >= beamPierce) break;
+              e.hp -= beamDmg;
               e.hitFlash = 0.1;
               hits++;
-              particles.text(e.x, e.y - e.radius, this.stats.damage.toString(), this.color, 10);
+              hitIds.add(e);
+              particles.text(e.x, e.y - e.radius, beamDmg.toString(), this.color, 10);
             }
+            this._beamTargets.push({ x: this.x + cosA * beamLen, y: this.y + sinA * beamLen });
           }
-          this._beamTarget = { x: this.x + Math.cos(a) * beamLen, y: this.y + Math.sin(a) * beamLen };
+          // Legacy compat for draw
+          this._beamTarget = this._beamTargets[0] || null;
           this._beamEndTime = performance.now() + 150;
         }
         break;
 
       case 'orbit':
-        // Continuous contact damage (handled in collision), no cooldown needed
         this.cooldownTimer = 0;
         break;
 
@@ -290,13 +347,14 @@ export class Companion {
           const hasOverload = this.hasEffect('overload');
           const hasMark = this.hasEffect('static_mark');
           const hasAutoSlow = this.hasEffect('auto_slow');
+          const hasVolatile = this.hasEffect('volatile_mark');
           const chainPierce = this.stats.pierce + (hasArc ? 3 : 0);
-          const chainDmg = hasOverload ? Math.round(this.stats.damage * 1.3) : this.stats.damage;
+          const chainDmg = Math.round((hasOverload ? this.stats.damage * 1.3 : this.stats.damage) * dmgMult);
           projectileSystem.spawnChain(
             this.x, this.y, target,
             this.stats.projectileSpeed, chainDmg,
             chainPierce, this.stats.radius, this.color, enemies,
-            { mark: hasMark, overload: hasOverload, slow: hasAutoSlow ? 1.5 : 0 }
+            { mark: hasMark, overload: hasOverload, slow: hasAutoSlow ? 1.5 : 0, volatileMark: hasVolatile }
           );
         }
         break;
@@ -363,21 +421,24 @@ export class Companion {
       ctx.fillText(this.level.toString(), sx + this.stats.radius + 2, sy - this.stats.radius);
     }
 
-    // Beam effect (uses separate screenX/screenY calls — no aliasing)
-    if (this._beamEndTime && performance.now() < this._beamEndTime && this._beamTarget) {
-      const bsx = camera.screenX(this.x);
-      const bsy = camera.screenY(this.y);
-      const bex = camera.screenX(this._beamTarget.x);
-      const bey = camera.screenY(this._beamTarget.y);
-      ctx.beginPath();
-      ctx.moveTo(bsx, bsy);
-      ctx.lineTo(bex, bey);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 3;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 8;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
+    // Beam effect — supports fork_beam multi-target
+    if (this._beamEndTime && performance.now() < this._beamEndTime) {
+      const targets = this._beamTargets || (this._beamTarget ? [this._beamTarget] : []);
+      if (targets.length > 0) {
+        const bsx = camera.screenX(this.x);
+        const bsy = camera.screenY(this.y);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 8;
+        for (const t of targets) {
+          ctx.beginPath();
+          ctx.moveTo(bsx, bsy);
+          ctx.lineTo(camera.screenX(t.x), camera.screenY(t.y));
+          ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
+      }
     }
   }
 }

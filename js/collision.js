@@ -44,6 +44,11 @@ export function handleProjectileHit(enemy, projectile, particles) {
     enemy.marked = 3;
   }
 
+  // Apply volatile mark (explodes on death)
+  if (projectile.volatileMark) {
+    enemy.volatileMarked = true;
+  }
+
   if (projectile.slow && projectile.slow > 0) {
     enemy.slowTimer = Math.max(enemy.slowTimer || 0, 1.5);
   }

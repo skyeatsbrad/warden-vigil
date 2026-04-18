@@ -36,6 +36,8 @@ export class ProjectileSystem {
     p.chainRange = 0;
     p.mark = false;
     p.overload = false;
+    p.ricochet = false;
+    p.volatileMark = false;
     return p;
   }
 
@@ -55,6 +57,7 @@ export class ProjectileSystem {
       explodeRadius = 0,
       slow = 0,
       lifetime = 3,
+      ricochet = false,
     } = opts;
 
     const p = this._acquire();
@@ -75,6 +78,7 @@ export class ProjectileSystem {
     p.slow = slow;
     p.lifetime = lifetime;
     p.age = 0;
+    p.ricochet = ricochet;
 
     // Split shots
     if (split > 0) {
@@ -128,6 +132,7 @@ export class ProjectileSystem {
     p.chainRange = 150;
     p.mark = opts.mark || false;
     p.overload = opts.overload || false;
+    p.volatileMark = opts.volatileMark || false;
   }
 
   update(dt, enemies, particles, onHit, grid) {
@@ -209,7 +214,9 @@ export class ProjectileSystem {
 
           if (nextTarget) {
             const a2 = angle(enemy, nextTarget);
-            const bounceDmgMult = p.overload ? 1.0 : 0.7;
+            // Overload: final bounce deals 2×, intermediate bounces normal
+            const isLastBounce = p.chain - 1 <= 0;
+            const bounceDmgMult = p.overload ? (isLastBounce ? 2.0 : 1.0) : 0.7;
 
             const cp = this._acquire();
             if (cp) {
@@ -232,6 +239,7 @@ export class ProjectileSystem {
               cp.chainRange = p.chainRange;
               cp.mark = p.mark;
               cp.overload = p.overload;
+              cp.volatileMark = p.volatileMark;
               // Copy parent hitIds so chain doesn't re-hit
               for (const id of p.hitIds) cp.hitIds.add(id);
             }
@@ -256,6 +264,24 @@ export class ProjectileSystem {
 
         p.pierce--;
         if (p.pierce <= 0) {
+          // Ricochet: spawn a bounce toward nearest enemy on final hit
+          if (p.ricochet) {
+            const ricoCandidates = grid.query2(enemy.x, enemy.y, 200);
+            let ricoTarget = null, ricoMinD = Infinity;
+            for (const e2 of ricoCandidates) {
+              if (!e2 || e2.hp <= 0 || p.hitIds.has(e2.id)) continue;
+              const d2 = dist(enemy, e2);
+              if (d2 < ricoMinD) { ricoMinD = d2; ricoTarget = e2; }
+            }
+            if (ricoTarget) {
+              const ra = angle(enemy, ricoTarget);
+              this.spawn(enemy.x, enemy.y, ra, p.speed, p.damage, 1, p.radius, p.color,
+                { homing: p.homing, explodeRadius: p.explodeRadius, slow: p.slow, ricochet: false });
+              // Carry hitIds to prevent re-hitting
+              const rp = this.pool[this.count - 1];
+              if (rp) for (const id of p.hitIds) rp.hitIds.add(id);
+            }
+          }
           this._kill(i);
           killed = true;
         }

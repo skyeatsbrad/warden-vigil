@@ -156,21 +156,33 @@ export function getCompanionStats(baseDef, level) {
 // Type-specific modifier pool
 export const MODIFIERS = {
   // ── Projectile ──
-  split_bloom:  { name: 'Split Bloom',      desc: 'Fires 3 projectiles in a fan',         icon: '✿', attackTypes: ['projectile'], rarity: 'rare' },
-  detonate:     { name: 'Detonation Core',  desc: 'Projectiles explode on hit for AoE',   icon: '💥', attackTypes: ['projectile'], rarity: 'rare' },
-  homing:       { name: 'Homing Sigil',     desc: 'Projectiles track the nearest enemy',  icon: '◎', attackTypes: ['projectile'], rarity: 'epic' },
+  split_bloom:    { name: 'Split Bloom',      desc: 'Fires 3 projectiles in a fan',            icon: '✿', attackTypes: ['projectile'], rarity: 'rare' },
+  detonate:       { name: 'Detonation Core',  desc: 'Projectiles explode on hit for AoE',      icon: '💥', attackTypes: ['projectile'], rarity: 'rare' },
+  piercing_surge: { name: 'Piercing Surge',   desc: 'Projectiles pierce +3 extra enemies',     icon: '➤', attackTypes: ['projectile'], rarity: 'rare' },
+  homing:         { name: 'Homing Sigil',     desc: 'Projectiles track the nearest enemy',     icon: '◎', attackTypes: ['projectile'], rarity: 'epic' },
+  ricochet:       { name: 'Ricochet',         desc: 'Projectiles bounce to a nearby enemy',    icon: '↯', attackTypes: ['projectile'], rarity: 'epic' },
   // ── Orbit ──
-  orbit_surge:  { name: 'Orbit Surge',      desc: 'Orbit 50% faster, +20% damage',        icon: '🌀', attackTypes: ['orbit'], rarity: 'rare' },
-  wider_ring:   { name: 'Wider Ring',       desc: '+40% orbit radius for more coverage',   icon: '⭕', attackTypes: ['orbit'], rarity: 'rare' },
-  contact_burn: { name: 'Contact Burn',     desc: 'Burns enemies on contact 2× faster',    icon: '🔥', attackTypes: ['orbit'], rarity: 'epic' },
+  orbit_surge:    { name: 'Orbit Surge',      desc: 'Orbit 50% faster, +20% damage',           icon: '🌀', attackTypes: ['orbit'], rarity: 'rare' },
+  wider_ring:     { name: 'Wider Ring',       desc: '+40% orbit radius for more coverage',      icon: '⭕', attackTypes: ['orbit'], rarity: 'rare' },
+  contact_burn:   { name: 'Contact Burn',     desc: 'Burns enemies on contact 2× faster',       icon: '🔥', attackTypes: ['orbit'], rarity: 'epic' },
   // ── Chain ──
-  chain_arc:    { name: 'Chain Arc',        desc: '+3 chain bounces',                      icon: '⚡', attackTypes: ['chain'], rarity: 'rare' },
-  overload:     { name: 'Overload',         desc: 'Chain attacks deal +30% base damage',   icon: '⛓', attackTypes: ['chain'], rarity: 'rare' },
-  static_mark:  { name: 'Static Mark',      desc: 'Chained foes take +25% damage for 3s', icon: '⊛', attackTypes: ['chain'], rarity: 'epic' },
+  chain_arc:      { name: 'Chain Arc',        desc: '+3 chain bounces',                         icon: '⚡', attackTypes: ['chain'], rarity: 'rare' },
+  overload:       { name: 'Overload',         desc: 'Final chain bounce deals 2× damage',      icon: '⛓', attackTypes: ['chain'], rarity: 'rare' },
+  static_mark:    { name: 'Static Mark',      desc: 'Chained foes take +25% damage for 3s',    icon: '⊛', attackTypes: ['chain'], rarity: 'epic' },
+  volatile_mark:  { name: 'Volatile Mark',    desc: 'Marked enemies explode on death',          icon: '☢', attackTypes: ['chain'], rarity: 'epic' },
   // ── Aura ──
-  linger_field: { name: 'Lingering Field',  desc: 'Aura cooldown reduced by 40%',          icon: '◉', attackTypes: ['aura'], rarity: 'rare' },
-  slow_field:   { name: 'Slow Field',       desc: 'Aura slows enemies by 40% for 2s',     icon: '❄', attackTypes: ['aura'], rarity: 'rare' },
-  pulse_echo:   { name: 'Pulse Echo',       desc: 'Aura deals double damage',              icon: '◎', attackTypes: ['aura'], rarity: 'epic' },
+  linger_field:   { name: 'Lingering Field',  desc: 'Aura cooldown reduced by 40%',             icon: '◉', attackTypes: ['aura'], rarity: 'rare' },
+  slow_field:     { name: 'Slow Field',       desc: 'Aura slows enemies by 40% for 2s',        icon: '❄', attackTypes: ['aura'], rarity: 'rare' },
+  pulse_echo:     { name: 'Pulse Echo',       desc: 'Aura deals double damage',                 icon: '◎', attackTypes: ['aura'], rarity: 'epic' },
+  gravity_well:   { name: 'Gravity Well',     desc: 'Aura pulls enemies toward companion',      icon: '⊕', attackTypes: ['aura'], rarity: 'epic' },
+  // ── Beam ──
+  fork_beam:      { name: 'Fork Beam',        desc: 'Fires 2 extra beams in a spread',          icon: '⑂', attackTypes: ['beam'], rarity: 'rare' },
+  beam_pierce:    { name: 'Beam Pierce',      desc: 'Beam pierces +3 additional enemies',       icon: '⟿', attackTypes: ['beam'], rarity: 'rare' },
+  searing_lance:  { name: 'Searing Lance',    desc: '2× beam damage and +50% range',            icon: '🔱', attackTypes: ['beam'], rarity: 'epic' },
+  // ── Melee ──
+  cleave:         { name: 'Cleave',           desc: '+80% hit radius, hits more enemies',        icon: '⚔', attackTypes: ['melee'], rarity: 'rare' },
+  frenzy_strike:  { name: 'Frenzy Strike',    desc: 'Kills halve the remaining cooldown',       icon: '⚡', attackTypes: ['melee'], rarity: 'rare' },
+  vampiric:       { name: 'Vampiric',         desc: 'Heal 1 HP per enemy hit',                  icon: '🩸', attackTypes: ['melee'], rarity: 'epic' },
 };
 
 // Get modifiers compatible with a given attack type
