@@ -32,7 +32,7 @@ export class Companion {
     }
   }
 
-  update(dt, player, enemies) {
+  update(dt, player, enemies, grid) {
     const behavior = this.def.behavior;
     const orbitDist = 55 + this.id * 12;
 
@@ -67,7 +67,7 @@ export class Companion {
       case 'chase':
         {
           // Chase nearest enemy, return to player if no enemy
-          let target = this._findNearest(enemies, this.stats.range + 80);
+          let target = this._findNearest(enemies, this.stats.range + 80, grid);
           if (target) {
             const a = angle(this, target);
             const moveSpeed = (this.stats.speed || 2) * 60;
@@ -108,11 +108,11 @@ export class Companion {
     return this.cooldownTimer <= 0;
   }
 
-  attack(enemies, projectileSystem, particles) {
+  attack(enemies, projectileSystem, particles, grid) {
     if (!this.canAttack()) return;
     if (enemies.length === 0) return;
 
-    const target = this._findNearest(enemies, this.stats.range);
+    const target = this._findNearest(enemies, this.stats.range, grid);
     if (!target && this.def.attack !== 'orbit' && this.def.attack !== 'aura') return;
 
     this.cooldownTimer = this.stats.cooldown;
@@ -147,12 +147,15 @@ export class Companion {
         break;
 
       case 'melee':
-        for (const e of enemies) {
-          if (dist(this, e) < this.stats.range + e.radius) {
-            e.hp -= this.stats.damage;
-            e.hitFlash = 0.1;
-            particles.emit(e.x, e.y, 4, this.def.color, { speedMax: 80, life: 0.3 });
-            particles.text(e.x, e.y - e.radius, this.stats.damage.toString(), this.def.color);
+        {
+          const nearby = grid.query(this.x, this.y, this.stats.range + 20);
+          for (const e of nearby) {
+            if (dist(this, e) < this.stats.range + e.radius) {
+              e.hp -= this.stats.damage;
+              e.hitFlash = 0.1;
+              particles.emit(e.x, e.y, 4, this.def.color, { speedMax: 80, life: 0.3 });
+              particles.text(e.x, e.y - e.radius, this.stats.damage.toString(), this.def.color);
+            }
           }
         }
         break;
@@ -162,7 +165,8 @@ export class Companion {
           const hasEcho = this.modifiers.includes('pulse_echo');
           const hasSlowF = this.modifiers.includes('slow_field');
           const dmg = hasEcho ? this.stats.damage * 2 : this.stats.damage;
-          for (const e of enemies) {
+          const nearby = grid.query(this.x, this.y, this.stats.range);
+          for (const e of nearby) {
             if (dist(this, e) < this.stats.range) {
               e.hp -= dmg;
               e.hitFlash = 0.1;
@@ -182,7 +186,8 @@ export class Companion {
           const a = angle(this, target);
           const beamLen = this.stats.range;
           let hits = 0;
-          for (const e of enemies) {
+          const nearby = grid.query(this.x, this.y, beamLen);
+          for (const e of nearby) {
             if (hits >= this.stats.pierce) break;
             const dx = e.x - this.x;
             const dy = e.y - this.y;
@@ -224,9 +229,10 @@ export class Companion {
     }
   }
 
-  _findNearest(enemies, range) {
+  _findNearest(enemies, range, grid) {
+    const candidates = grid ? grid.query(this.x, this.y, range) : enemies;
     let nearest = null, minD = range;
-    for (const e of enemies) {
+    for (const e of candidates) {
       const d = dist(this, e);
       if (d < minD) { minD = d; nearest = e; }
     }
@@ -301,7 +307,7 @@ export class Companion {
 }
 
 // ── Orbit damage companion special case ──
-export function processOrbitDamage(companions, enemies, particles, dt) {
+export function processOrbitDamage(companions, enemies, particles, dt, grid) {
   for (const c of companions) {
     if (c.def.attack !== 'orbit') continue;
     const hasBurn = c.modifiers.includes('contact_burn');
@@ -309,7 +315,9 @@ export function processOrbitDamage(companions, enemies, particles, dt) {
     const tickRate = hasBurn ? 0.15 : 0.3;
     const dmgMult = hasSurge ? 1.2 : 1;
     const timerId = '_oht_' + c.id;
-    for (const e of enemies) {
+    const hitRange = c.stats.radius + c.stats.range * 0.3 + 20;
+    const nearby = grid.query(c.x, c.y, hitRange);
+    for (const e of nearby) {
       if (dist(c, e) < c.stats.radius + e.radius + c.stats.range * 0.3) {
         if (!e[timerId]) e[timerId] = 0;
         e[timerId] -= dt;

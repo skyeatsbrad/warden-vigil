@@ -10,6 +10,7 @@ import { Camera } from './camera.js';
 import { UI } from './ui.js';
 import { Progression } from './progression.js';
 import { processCollisions, handleProjectileHit } from './collision.js';
+import { SpatialGrid } from './spatial-grid.js';
 import { COMPANION_DEFS } from './data/companions.js';
 import { formatTime, dist, weightedPick } from './utils.js';
 
@@ -147,10 +148,13 @@ export class Game {
     // Camera
     this.camera.follow(this.player, dt);
 
+    // Build spatial grid once per frame
+    const grid = new SpatialGrid(this.enemySystem.enemies);
+
     // Companions
     for (const c of this.companions) {
-      c.update(dt, this.player, this.enemySystem.enemies);
-      c.attack(this.enemySystem.enemies, this.projectiles, this.particles);
+      c.update(dt, this.player, this.enemySystem.enemies, grid);
+      c.attack(this.enemySystem.enemies, this.projectiles, this.particles, grid);
     }
 
     // Attack speed buff: extra cooldown reduction for all companions
@@ -162,15 +166,15 @@ export class Game {
     }
 
     // Orbit damage
-    processOrbitDamage(this.companions, this.enemySystem.enemies, this.particles, dt);
+    processOrbitDamage(this.companions, this.enemySystem.enemies, this.particles, dt, grid);
 
     // Enemies
-    this.enemySystem.update(dt, this.elapsed, this.player, this.camera);
+    this.enemySystem.update(dt, this.elapsed, this.player, this.camera, grid);
 
     // Projectiles
     this.projectiles.update(dt, this.enemySystem.enemies, this.particles, (enemy, proj) => {
       handleProjectileHit(enemy, proj, this.particles);
-    });
+    }, grid);
 
     // Collisions (player vs enemies)
     processCollisions(this.player, this.enemySystem.enemies, this.particles, this.camera);

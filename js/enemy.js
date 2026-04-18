@@ -5,24 +5,6 @@ import { weightedPick } from './utils.js';
 
 let _nextEnemyId = 0;
 
-const ENEMY_CELL_SIZE = 64;
-const NEIGHBOR_OFFSETS = [
-  [-1, -1], [0, -1], [1, -1],
-  [-1,  0], [0,  0], [1,  0],
-  [-1,  1], [0,  1], [1,  1],
-];
-
-function cellKey(cx, cy) {
-  return `${cx},${cy}`;
-}
-
-function getCellCoords(x, y) {
-  return {
-    cx: Math.floor(x / ENEMY_CELL_SIZE),
-    cy: Math.floor(y / ENEMY_CELL_SIZE),
-  };
-}
-
 export class EnemySystem {
   constructor() {
     this.enemies = [];
@@ -32,7 +14,7 @@ export class EnemySystem {
     this.minibossTimer = 0;
   }
 
-  update(dt, elapsed, player, camera) {
+  update(dt, elapsed, player, camera, grid) {
     const elapsedMinutes = elapsed / 60;
 
     // Spawn timer
@@ -60,21 +42,7 @@ export class EnemySystem {
       this._spawnSpecial('voidlord', player, camera, elapsedMinutes);
     }
 
-    // Build lightweight enemy grid for local separation
-    const grid = new Map();
-    for (const enemy of this.enemies) {
-      if (!enemy || enemy.hp <= 0) continue;
-      const { cx, cy } = getCellCoords(enemy.x, enemy.y);
-      const key = cellKey(cx, cy);
-      let bucket = grid.get(key);
-      if (!bucket) {
-        bucket = [];
-        grid.set(key, bucket);
-      }
-      bucket.push(enemy);
-    }
-
-    // Update enemy AI
+    // Update enemy AI (use shared spatial grid for local separation)
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
       if (!e) continue;
@@ -92,34 +60,29 @@ export class EnemySystem {
       moveX /= moveLen;
       moveY /= moveLen;
 
-      // Local separation using nearby cells only
+      // Local separation using shared grid
       let sepX = 0;
       let sepY = 0;
 
-      const { cx, cy } = getCellCoords(e.x, e.y);
+      const nearby = grid.neighbors(e.x, e.y);
 
-      for (const [ox, oy] of NEIGHBOR_OFFSETS) {
-        const bucket = grid.get(cellKey(cx + ox, cy + oy));
-        if (!bucket) continue;
+      for (const other of nearby) {
+        if (!other || other === e || other.hp <= 0) continue;
 
-        for (const other of bucket) {
-          if (!other || other === e || other.hp <= 0) continue;
+        const dx = e.x - other.x;
+        const dy = e.y - other.y;
 
-          const dx = e.x - other.x;
-          const dy = e.y - other.y;
+        if (Math.abs(dx) > 28 || Math.abs(dy) > 28) continue;
 
-          if (Math.abs(dx) > 28 || Math.abs(dy) > 28) continue;
+        const d2 = dx * dx + dy * dy;
+        if (d2 <= 0.0001) continue;
 
-          const d2 = dx * dx + dy * dy;
-          if (d2 <= 0.0001) continue;
-
-          const desired = e.radius + other.radius + 8;
-          if (d2 < desired * desired) {
-            const d = Math.sqrt(d2);
-            const push = (desired - d) / desired;
-            sepX += (dx / d) * push;
-            sepY += (dy / d) * push;
-          }
+        const desired = e.radius + other.radius + 8;
+        if (d2 < desired * desired) {
+          const d = Math.sqrt(d2);
+          const push = (desired - d) / desired;
+          sepX += (dx / d) * push;
+          sepY += (dy / d) * push;
         }
       }
 

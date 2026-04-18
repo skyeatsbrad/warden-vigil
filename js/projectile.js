@@ -2,55 +2,6 @@
 
 import { dist, angle } from './utils.js';
 
-const PROJECTILE_CELL_SIZE = 96;
-const PROJECTILE_NEIGHBOR_OFFSETS = [
-  [-1, -1], [0, -1], [1, -1],
-  [-1,  0], [0,  0], [1,  0],
-  [-1,  1], [0,  1], [1,  1],
-];
-
-function cellKey(cx, cy) {
-  return `${cx},${cy}`;
-}
-
-function getCellCoords(x, y) {
-  return {
-    cx: Math.floor(x / PROJECTILE_CELL_SIZE),
-    cy: Math.floor(y / PROJECTILE_CELL_SIZE),
-  };
-}
-
-function buildEnemyGrid(enemies) {
-  const grid = new Map();
-
-  for (const enemy of enemies) {
-    if (!enemy || enemy.hp <= 0) continue;
-    const { cx, cy } = getCellCoords(enemy.x, enemy.y);
-    const key = cellKey(cx, cy);
-    let bucket = grid.get(key);
-    if (!bucket) {
-      bucket = [];
-      grid.set(key, bucket);
-    }
-    bucket.push(enemy);
-  }
-
-  return grid;
-}
-
-function getNearbyEnemies(grid, x, y) {
-  const { cx, cy } = getCellCoords(x, y);
-  const results = [];
-
-  for (const [ox, oy] of PROJECTILE_NEIGHBOR_OFFSETS) {
-    const bucket = grid.get(cellKey(cx + ox, cy + oy));
-    if (!bucket) continue;
-    results.push(...bucket);
-  }
-
-  return results;
-}
-
 export class ProjectileSystem {
   constructor() {
     this.projectiles = [];
@@ -139,9 +90,7 @@ export class ProjectileSystem {
     });
   }
 
-  update(dt, enemies, particles, onHit) {
-    const enemyGrid = buildEnemyGrid(enemies);
-
+  update(dt, enemies, particles, onHit, grid) {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
       p.age += dt;
@@ -151,7 +100,7 @@ export class ProjectileSystem {
         let closest = null;
         let minD = Infinity;
 
-        const nearbyForHoming = getNearbyEnemies(enemyGrid, p.x, p.y);
+        const nearbyForHoming = grid.query(p.x, p.y, 300);
 
         for (const e of nearbyForHoming) {
           if (!e || e.hp <= 0) continue;
@@ -187,7 +136,7 @@ export class ProjectileSystem {
         continue;
       }
 
-      const nearbyEnemies = getNearbyEnemies(enemyGrid, p.x, p.y);
+      const nearbyEnemies = grid.neighbors(p.x, p.y);
 
       // Check hits
       for (const enemy of nearbyEnemies) {
@@ -203,7 +152,7 @@ export class ProjectileSystem {
           let nextTarget = null;
           let minD2 = Infinity;
 
-          const chainCandidates = getNearbyEnemies(enemyGrid, enemy.x, enemy.y);
+          const chainCandidates = grid.query(enemy.x, enemy.y, p.chainRange);
 
           for (const e2 of chainCandidates) {
             if (!e2 || e2.hp <= 0) continue;
@@ -248,7 +197,7 @@ export class ProjectileSystem {
 
         // Explode
         if (p.explodeRadius > 0) {
-          const explosionCandidates = getNearbyEnemies(enemyGrid, enemy.x, enemy.y);
+          const explosionCandidates = grid.query(enemy.x, enemy.y, p.explodeRadius);
 
           for (const e2 of explosionCandidates) {
             if (!e2 || e2.hp <= 0) continue;
