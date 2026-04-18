@@ -35,12 +35,13 @@ export class Camera {
     this.shake = Math.min(this.shake + 0.15, 0.5);
   }
 
-  // Convert world coords to screen coords
-  worldToScreen(wx, wy) {
-    return {
-      x: wx - this.x + this.shakeX,
-      y: wy - this.y + this.shakeY,
-    };
+  // Scalar world-to-screen conversions (allocation-free)
+  screenX(wx) {
+    return wx - this.x + this.shakeX;
+  }
+
+  screenY(wy) {
+    return wy - this.y + this.shakeY;
   }
 
   // Check if world position is visible on screen (with margin)
@@ -49,6 +50,15 @@ export class Camera {
            wx < this.x + this.w + margin &&
            wy > this.y - margin &&
            wy < this.y + this.h + margin;
+  }
+
+  // Distance from camera center in screen-widths (for LOD tiers)
+  screenDistanceFactor(wx, wy) {
+    const cx = this.x + this.w * 0.5;
+    const cy = this.y + this.h * 0.5;
+    const dx = Math.abs(wx - cx) / this.w;
+    const dy = Math.abs(wy - cy) / this.h;
+    return Math.max(dx, dy);
   }
 
   resize(w, h) {

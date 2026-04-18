@@ -1,23 +1,51 @@
-// ── XP orbs + leveling ──
+// ── XP orbs with object pooling ──
+// Swap-and-pop pool, same pattern as particles/projectiles.
 
 import { dist } from './utils.js';
 
+const ORB_POOL_SIZE = 200;
+
+function _createOrb() {
+  return {
+    x: 0, y: 0, amount: 0,
+    radius: 3, magnet: false,
+    vx: 0, vy: 0,
+  };
+}
+
 export class XPSystem {
   constructor() {
-    this.orbs = [];
+    this.pool = new Array(ORB_POOL_SIZE);
+    for (let i = 0; i < ORB_POOL_SIZE; i++) {
+      this.pool[i] = _createOrb();
+    }
+    this.count = 0;
+  }
+
+  _acquire() {
+    if (this.count >= ORB_POOL_SIZE) return null;
+    return this.pool[this.count++];
+  }
+
+  _kill(i) {
+    this.count--;
+    if (i < this.count) {
+      const tmp = this.pool[i];
+      this.pool[i] = this.pool[this.count];
+      this.pool[this.count] = tmp;
+    }
   }
 
   spawnOrb(x, y, amount) {
-    // Slight random offset
-    this.orbs.push({
-      x: x + (Math.random() - 0.5) * 10,
-      y: y + (Math.random() - 0.5) * 10,
-      amount,
-      radius: Math.min(3 + amount, 8),
-      magnet: false,
-      vx: 0,
-      vy: 0,
-    });
+    const orb = this._acquire();
+    if (!orb) return;
+    orb.x = x + (Math.random() - 0.5) * 10;
+    orb.y = y + (Math.random() - 0.5) * 10;
+    orb.amount = amount;
+    orb.radius = Math.min(3 + amount, 8);
+    orb.magnet = false;
+    orb.vx = 0;
+    orb.vy = 0;
   }
 
   spawnFromEnemy(enemy) {
@@ -36,9 +64,10 @@ export class XPSystem {
 
   update(dt, player) {
     let levelsGained = 0;
+    let i = 0;
 
-    for (let i = this.orbs.length - 1; i >= 0; i--) {
-      const orb = this.orbs[i];
+    while (i < this.count) {
+      const orb = this.pool[i];
       const d = dist(orb, player);
 
       // Magnet pull
@@ -60,7 +89,9 @@ export class XPSystem {
       // Pickup
       if (d < player.radius + orb.radius) {
         levelsGained += player.addXp(orb.amount);
-        this.orbs.splice(i, 1);
+        this._kill(i);
+      } else {
+        i++;
       }
     }
 
@@ -68,27 +99,31 @@ export class XPSystem {
   }
 
   draw(ctx, camera) {
-    for (const orb of this.orbs) {
+    ctx.shadowColor = '#c9a0ff';
+    ctx.shadowBlur = 8;
+
+    for (let i = 0; i < this.count; i++) {
+      const orb = this.pool[i];
       if (!camera.isVisible(orb.x, orb.y, 10)) continue;
-      const pos = camera.worldToScreen(orb.x, orb.y);
+      const sx = camera.screenX(orb.x);
+      const sy = camera.screenY(orb.y);
 
       ctx.beginPath();
-      ctx.arc(pos.x, pos.y, orb.radius, 0, Math.PI * 2);
+      ctx.arc(sx, sy, orb.radius, 0, Math.PI * 2);
       ctx.fillStyle = '#9b59b6';
-      ctx.shadowColor = '#c9a0ff';
-      ctx.shadowBlur = 8;
       ctx.fill();
-      ctx.shadowBlur = 0;
 
       // Inner highlight
       ctx.beginPath();
-      ctx.arc(pos.x - 1, pos.y - 1, orb.radius * 0.4, 0, Math.PI * 2);
+      ctx.arc(sx - 1, sy - 1, orb.radius * 0.4, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
       ctx.fill();
     }
+
+    ctx.shadowBlur = 0;
   }
 
   clear() {
-    this.orbs.length = 0;
+    this.count = 0;
   }
 }

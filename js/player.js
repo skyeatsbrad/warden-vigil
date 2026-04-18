@@ -78,23 +78,23 @@ export class Player {
   }
 
   draw(ctx, camera) {
-    const pos = camera.worldToScreen(this.x, this.y);
+    const sx = camera.screenX(this.x);
+    const sy = camera.screenY(this.y);
     const bob = Math.sin(this._bobPhase) * 2;
     const flicker = this.invulnTime > 0 && Math.sin(this.invulnTime * 30) > 0;
 
     if (flicker) return;
 
-    ctx.save();
-    ctx.translate(pos.x, pos.y + bob);
+    const cy = sy + bob;
 
     ctx.beginPath();
-    ctx.arc(0, 0, this.magnetRadius, 0, Math.PI * 2);
+    ctx.arc(sx, cy, this.magnetRadius, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(201,160,255,0.08)';
     ctx.lineWidth = 1;
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+    ctx.arc(sx, cy, this.radius, 0, Math.PI * 2);
     ctx.fillStyle = this.color;
     ctx.shadowColor = this.color;
     ctx.shadowBlur = 12;
@@ -104,15 +104,13 @@ export class Player {
     const dx = Math.cos(this.facingAngle) * this.radius * 1.1;
     const dy = Math.sin(this.facingAngle) * this.radius * 1.1;
     ctx.beginPath();
-    ctx.arc(dx, dy, 4, 0, Math.PI * 2);
+    ctx.arc(sx + dx, cy + dy, 4, 0, Math.PI * 2);
     ctx.fillStyle = '#fff';
     ctx.fill();
 
     ctx.beginPath();
-    ctx.arc(0, -2, 4, 0, Math.PI * 2);
+    ctx.arc(sx, cy - 2, 4, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
     ctx.fill();
-
-    ctx.restore();
   }
 }

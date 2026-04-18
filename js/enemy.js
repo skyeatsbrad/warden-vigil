@@ -42,7 +42,12 @@ export class EnemySystem {
       this._spawnSpecial('voidlord', player, camera, elapsedMinutes);
     }
 
-    // Update enemy AI (use shared spatial grid for local separation)
+    // Update enemy AI with LOD tiers based on camera distance
+    // Near (< 1.0 screen): full separation every frame
+    // Mid  (1.0–2.0 screens): separation every 3rd frame
+    // Far  (> 2.0 screens): chase only, no separation
+    const frameIdx = this._frameCount = (this._frameCount || 0) + 1;
+
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
       if (!e) continue;
@@ -60,39 +65,43 @@ export class EnemySystem {
       moveX /= moveLen;
       moveY /= moveLen;
 
-      // Local separation using shared grid
-      let sepX = 0;
-      let sepY = 0;
+      // LOD: decide separation tier
+      const screenDist = camera.screenDistanceFactor(e.x, e.y);
+      const runSep = screenDist < 1.0 ||
+        (screenDist < 2.0 && (frameIdx + i) % 3 === 0);
 
-      const nearby = grid.neighbors(e.x, e.y);
+      if (runSep) {
+        let sepX = 0;
+        let sepY = 0;
 
-      for (const other of nearby) {
-        if (!other || other === e || other.hp <= 0) continue;
+        grid.forEachNeighbor(e.x, e.y, other => {
+          if (other === e || other.hp <= 0) return;
 
-        const dx = e.x - other.x;
-        const dy = e.y - other.y;
+          const dx = e.x - other.x;
+          const dy = e.y - other.y;
 
-        if (Math.abs(dx) > 28 || Math.abs(dy) > 28) continue;
+          if (Math.abs(dx) > 28 || Math.abs(dy) > 28) return;
 
-        const d2 = dx * dx + dy * dy;
-        if (d2 <= 0.0001) continue;
+          const d2 = dx * dx + dy * dy;
+          if (d2 <= 0.0001) return;
 
-        const desired = e.radius + other.radius + 8;
-        if (d2 < desired * desired) {
-          const d = Math.sqrt(d2);
-          const push = (desired - d) / desired;
-          sepX += (dx / d) * push;
-          sepY += (dy / d) * push;
-        }
+          const desired = e.radius + other.radius + 8;
+          if (d2 < desired * desired) {
+            const d = Math.sqrt(d2);
+            const push = (desired - d) / desired;
+            sepX += (dx / d) * push;
+            sepY += (dy / d) * push;
+          }
+        });
+
+        // Blend chase and separation
+        moveX = moveX * 0.9 + sepX * 1.8;
+        moveY = moveY * 0.9 + sepY * 1.8;
+
+        moveLen = Math.hypot(moveX, moveY) || 1;
+        moveX /= moveLen;
+        moveY /= moveLen;
       }
-
-      // Blend chase and separation
-      moveX = moveX * 0.9 + sepX * 1.8;
-      moveY = moveY * 0.9 + sepY * 1.8;
-
-      moveLen = Math.hypot(moveX, moveY) || 1;
-      moveX /= moveLen;
-      moveY /= moveLen;
 
       e.x += moveX * spd * dt;
       e.y += moveY * spd * dt;
@@ -259,14 +268,12 @@ export class EnemySystem {
       if (!e || e.hp <= 0) continue;
       if (!camera.isVisible(e.x, e.y, e.radius + 20)) continue;
 
-      const pos = camera.worldToScreen(e.x, e.y);
-
-      ctx.save();
-      ctx.translate(pos.x, pos.y);
+      const sx = camera.screenX(e.x);
+      const sy = camera.screenY(e.y);
 
       if (e.glow) {
         ctx.beginPath();
-        ctx.arc(0, 0, e.radius + 5, 0, Math.PI * 2);
+        ctx.arc(sx, sy, e.radius + 5, 0, Math.PI * 2);
         ctx.fillStyle = e.color + '30';
         ctx.shadowColor = e.color;
         ctx.shadowBlur = 15;
@@ -275,13 +282,13 @@ export class EnemySystem {
       }
 
       ctx.beginPath();
-      ctx.arc(0, 0, e.radius, 0, Math.PI * 2);
+      ctx.arc(sx, sy, e.radius, 0, Math.PI * 2);
       ctx.fillStyle = e.hitFlash > 0 ? '#fff' : e.color;
       ctx.fill();
 
       if (e.slowTimer > 0) {
         ctx.beginPath();
-        ctx.arc(0, 0, e.radius + 2, 0, Math.PI * 2);
+        ctx.arc(sx, sy, e.radius + 2, 0, Math.PI * 2);
         ctx.strokeStyle = '#5dade2';
         ctx.lineWidth = 1.5;
         ctx.stroke();
@@ -290,14 +297,12 @@ export class EnemySystem {
       if (e.tier !== 'basic' && e.hp < e.maxHp) {
         const barW = e.radius * 2.5;
         const barH = 3;
-        const barY = -e.radius - 8;
+        const barY = sy - e.radius - 8;
         ctx.fillStyle = '#333';
-        ctx.fillRect(-barW / 2, barY, barW, barH);
+        ctx.fillRect(sx - barW / 2, barY, barW, barH);
         ctx.fillStyle = e.tier === 'boss' ? '#e74c3c' : '#e67e22';
-        ctx.fillRect(-barW / 2, barY, barW * (e.hp / e.maxHp), barH);
+        ctx.fillRect(sx - barW / 2, barY, barW * (e.hp / e.maxHp), barH);
       }
-
-      ctx.restore();
     }
   }
 

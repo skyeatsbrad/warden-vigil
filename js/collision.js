@@ -2,8 +2,10 @@
 
 import { dist } from './utils.js';
 
-export function processCollisions(player, enemies, particles, camera) {
-  for (const e of enemies) {
+export function processCollisions(player, enemies, particles, camera, grid) {
+  // Use grid to check only nearby enemies instead of scanning all
+  const nearby = grid.query(player.x, player.y, player.radius + 30);
+  for (const e of nearby) {
     const d = dist(player, e);
     const minDist = player.radius + e.radius;
 

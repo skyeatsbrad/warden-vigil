@@ -1,5 +1,7 @@
 // ── Particle system with object pooling ──
 // Pre-allocated pool with swap-and-pop removal. Zero allocations during gameplay.
+// Adaptive emission: accepts a pressure value (0–1) to reduce particle counts
+// when frame budget is tight.
 
 const POOL_SIZE = 500;
 
@@ -18,6 +20,7 @@ export class Particles {
       this.pool[i] = _createParticle();
     }
     this.count = 0;
+    this.pressure = 0; // 0 = relaxed, 1 = max pressure
   }
 
   _acquire() {
@@ -34,6 +37,13 @@ export class Particles {
     }
   }
 
+  // Scale down emit counts based on frame pressure
+  _budgetCount(requested) {
+    if (this.pressure <= 0.2) return requested;
+    const scale = Math.max(0.2, 1 - this.pressure * 0.8);
+    return Math.max(1, Math.round(requested * scale));
+  }
+
   emit(x, y, count, color, opts = {}) {
     const {
       speedMin = 30,
@@ -44,7 +54,9 @@ export class Particles {
       gravity = 0,
     } = opts;
 
-    for (let i = 0; i < count; i++) {
+    const budgeted = this._budgetCount(count);
+
+    for (let i = 0; i < budgeted; i++) {
       const p = this._acquire();
       if (!p) break;
 
@@ -74,7 +86,9 @@ export class Particles {
       life = 0.4,
     } = opts;
 
-    for (let i = 0; i < count; i++) {
+    const budgeted = this._budgetCount(count);
+
+    for (let i = 0; i < budgeted; i++) {
       const p = this._acquire();
       if (!p) break;
 
@@ -94,8 +108,11 @@ export class Particles {
     }
   }
 
-  // Floating text (damage numbers)
+  // Floating text (damage numbers) — throttled under heavy pressure
   text(x, y, str, color = '#fff', size = 14) {
+    // Under heavy pressure, skip ~half of damage text
+    if (this.pressure > 0.6 && Math.random() < this.pressure * 0.5) return;
+
     const p = this._acquire();
     if (!p) return;
 
@@ -131,7 +148,11 @@ export class Particles {
   draw(ctx, camera) {
     for (let i = 0; i < this.count; i++) {
       const p = this.pool[i];
-      const pos = camera.worldToScreen(p.x, p.y);
+      // Skip off-screen particles
+      if (!camera.isVisible(p.x, p.y, p.text ? 40 : p.size + 5)) continue;
+
+      const sx = camera.screenX(p.x);
+      const sy = camera.screenY(p.y);
       const alpha = Math.max(0, p.life / p.maxLife);
 
       if (p.text) {
@@ -139,12 +160,12 @@ export class Particles {
         ctx.font = `bold ${p.size}px monospace`;
         ctx.fillStyle = p.color;
         ctx.textAlign = 'center';
-        ctx.fillText(p.text, pos.x, pos.y);
+        ctx.fillText(p.text, sx, sy);
         ctx.globalAlpha = 1;
       } else {
         ctx.globalAlpha = alpha * 0.8;
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, p.size * alpha, 0, Math.PI * 2);
+        ctx.arc(sx, sy, p.size * alpha, 0, Math.PI * 2);
         ctx.fillStyle = p.color;
         ctx.fill();
         ctx.globalAlpha = 1;

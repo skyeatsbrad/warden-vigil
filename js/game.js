@@ -42,6 +42,10 @@ export class Game {
     this.overclockTimer = 0;
     this._overclockOriginals = [];
 
+    // Frame pressure tracking for adaptive quality
+    this._smoothedDt = 0.016;
+    this._targetDt = 1 / 60;
+
     this._setupScreens();
   }
 
@@ -139,6 +143,11 @@ export class Game {
   update(dt) {
     if (this.state !== 'playing') return;
 
+    // Frame pressure: smoothed ratio of actual dt to target dt
+    this._smoothedDt += (dt - this._smoothedDt) * 0.1;
+    const pressure = Math.min(1, Math.max(0, (this._smoothedDt / this._targetDt - 1) * 2));
+    this.particles.pressure = pressure;
+
     this.elapsed += dt;
     this.input.update();
 
@@ -176,8 +185,8 @@ export class Game {
       handleProjectileHit(enemy, proj, this.particles);
     }, grid);
 
-    // Collisions (player vs enemies)
-    processCollisions(this.player, this.enemySystem.enemies, this.particles, this.camera);
+    // Collisions (player vs nearby enemies via grid)
+    processCollisions(this.player, this.enemySystem.enemies, this.particles, this.camera, grid);
 
     // Pickups
     this._updatePickups(dt);
@@ -521,7 +530,8 @@ export class Game {
     };
     for (const p of this.pickups) {
       if (!cam.isVisible(p.x, p.y, 15)) continue;
-      const pos = cam.worldToScreen(p.x, p.y);
+      const sx = cam.screenX(p.x);
+      const sy = cam.screenY(p.y);
       const bob = Math.sin(p.age * 4) * 3;
       const color = PICKUP_COLORS[p.type];
 
@@ -529,7 +539,7 @@ export class Game {
       ctx.globalAlpha = p.life < 3 ? 0.3 + 0.7 * (p.life / 3) : 1;
 
       ctx.beginPath();
-      ctx.arc(pos.x, pos.y + bob, p.radius, 0, Math.PI * 2);
+      ctx.arc(sx, sy + bob, p.radius, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.shadowColor = color;
       ctx.shadowBlur = 10;
@@ -540,7 +550,7 @@ export class Game {
       ctx.font = 'bold 10px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(PICKUP_ICONS[p.type], pos.x, pos.y + bob);
+      ctx.fillText(PICKUP_ICONS[p.type], sx, sy + bob);
 
       ctx.globalAlpha = 1;
     }

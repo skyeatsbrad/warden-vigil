@@ -194,7 +194,7 @@ export class ProjectileSystem {
           let nextTarget = null;
           let minD2 = Infinity;
 
-          const chainCandidates = grid.query(enemy.x, enemy.y, p.chainRange);
+          const chainCandidates = grid.query2(enemy.x, enemy.y, p.chainRange);
 
           for (const e2 of chainCandidates) {
             if (!e2 || e2.hp <= 0) continue;
@@ -240,7 +240,7 @@ export class ProjectileSystem {
 
         // Explode
         if (p.explodeRadius > 0) {
-          const explosionCandidates = grid.query(enemy.x, enemy.y, p.explodeRadius);
+          const explosionCandidates = grid.query2(enemy.x, enemy.y, p.explodeRadius);
 
           for (const e2 of explosionCandidates) {
             if (!e2 || e2.hp <= 0) continue;
@@ -267,19 +267,20 @@ export class ProjectileSystem {
   }
 
   draw(ctx, camera) {
+    ctx.shadowBlur = 6;
     for (let i = 0; i < this.count; i++) {
       const p = this.pool[i];
       if (!camera.isVisible(p.x, p.y)) continue;
-      const pos = camera.worldToScreen(p.x, p.y);
+      const sx = camera.screenX(p.x);
+      const sy = camera.screenY(p.y);
 
       ctx.beginPath();
-      ctx.arc(pos.x, pos.y, p.radius, 0, Math.PI * 2);
+      ctx.arc(sx, sy, p.radius, 0, Math.PI * 2);
       ctx.fillStyle = p.color;
       ctx.shadowColor = p.color;
-      ctx.shadowBlur = 6;
       ctx.fill();
-      ctx.shadowBlur = 0;
     }
+    ctx.shadowBlur = 0;
   }
 
   clear() {

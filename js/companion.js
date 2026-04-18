@@ -241,16 +241,14 @@ export class Companion {
 
   draw(ctx, camera) {
     if (!camera.isVisible(this.x, this.y, 20)) return;
-    const pos = camera.worldToScreen(this.x, this.y);
-
-    ctx.save();
-    ctx.translate(pos.x, pos.y);
+    const sx = camera.screenX(this.x);
+    const sy = camera.screenY(this.y);
 
     // Aura pulse effect
     if (this._auraPulseEnd && performance.now() < this._auraPulseEnd) {
       const remaining = (this._auraPulseEnd - performance.now()) / 500;
       ctx.beginPath();
-      ctx.arc(0, 0, this.stats.range * (1 - remaining * 0.3), 0, Math.PI * 2);
+      ctx.arc(sx, sy, this.stats.range * (1 - remaining * 0.3), 0, Math.PI * 2);
       ctx.strokeStyle = this.def.color + Math.floor(remaining * 80).toString(16).padStart(2, '0');
       ctx.lineWidth = 2;
       ctx.stroke();
@@ -258,7 +256,7 @@ export class Companion {
 
     // Body glow
     ctx.beginPath();
-    ctx.arc(0, 0, this.stats.radius + 2, 0, Math.PI * 2);
+    ctx.arc(sx, sy, this.stats.radius + 2, 0, Math.PI * 2);
     ctx.fillStyle = this.def.color;
     ctx.shadowColor = this.def.color;
     ctx.shadowBlur = 10;
@@ -269,7 +267,7 @@ export class Companion {
 
     // Body
     ctx.beginPath();
-    ctx.arc(0, 0, this.stats.radius, 0, Math.PI * 2);
+    ctx.arc(sx, sy, this.stats.radius, 0, Math.PI * 2);
     ctx.fillStyle = this.def.color;
     ctx.fill();
 
@@ -278,24 +276,24 @@ export class Companion {
     ctx.font = `${this.stats.radius}px monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(this.def.icon, 0, 1);
+    ctx.fillText(this.def.icon, sx, sy + 1);
 
     // Level badge
     if (this.level > 1) {
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 8px monospace';
-      ctx.fillText(this.level.toString(), this.stats.radius + 2, -this.stats.radius);
+      ctx.fillText(this.level.toString(), sx + this.stats.radius + 2, sy - this.stats.radius);
     }
 
-    ctx.restore();
-
-    // Beam effect
+    // Beam effect (uses separate screenX/screenY calls — no aliasing)
     if (this._beamEndTime && performance.now() < this._beamEndTime && this._beamTarget) {
-      const start = camera.worldToScreen(this.x, this.y);
-      const end = camera.worldToScreen(this._beamTarget.x, this._beamTarget.y);
+      const bsx = camera.screenX(this.x);
+      const bsy = camera.screenY(this.y);
+      const bex = camera.screenX(this._beamTarget.x);
+      const bey = camera.screenY(this._beamTarget.y);
       ctx.beginPath();
-      ctx.moveTo(start.x, start.y);
-      ctx.lineTo(end.x, end.y);
+      ctx.moveTo(bsx, bsy);
+      ctx.lineTo(bex, bey);
       ctx.strokeStyle = this.def.color;
       ctx.lineWidth = 3;
       ctx.shadowColor = this.def.color;
