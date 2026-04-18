@@ -1,48 +1,36 @@
-// ── Particle system for visual effects ──
+// ── Particle system with object pooling ──
+// Pre-allocated pool with swap-and-pop removal. Zero allocations during gameplay.
 
-const MAX_PARTICLES = 500;
-const MAX_TEXT_PARTICLES = 120;
+const POOL_SIZE = 500;
+
+function _createParticle() {
+  return {
+    x: 0, y: 0, vx: 0, vy: 0,
+    life: 0, maxLife: 0, size: 0,
+    color: '', gravity: 0, text: null,
+  };
+}
 
 export class Particles {
   constructor() {
-    this.particles = [];
+    this.pool = new Array(POOL_SIZE);
+    for (let i = 0; i < POOL_SIZE; i++) {
+      this.pool[i] = _createParticle();
+    }
+    this.count = 0;
   }
 
-  _trimIfNeeded() {
-    if (this.particles.length <= MAX_PARTICLES) return;
+  _acquire() {
+    if (this.count >= POOL_SIZE) return null;
+    return this.pool[this.count++];
+  }
 
-    let textCount = 0;
-    for (const p of this.particles) {
-      if (p.text) textCount++;
-    }
-
-    // Drop oldest non-text particles first
-    for (let i = 0; i < this.particles.length && this.particles.length > MAX_PARTICLES; i++) {
-      if (!this.particles[i].text) {
-        this.particles.splice(i, 1);
-        i--;
-      }
-    }
-
-    // If still too many, trim from the front
-    while (this.particles.length > MAX_PARTICLES) {
-      this.particles.shift();
-    }
-
-    // Clamp text particles separately
-    if (textCount > MAX_TEXT_PARTICLES) {
-      let liveTextCount = 0;
-      for (const p of this.particles) {
-        if (p.text) liveTextCount++;
-      }
-
-      for (let i = 0; i < this.particles.length && liveTextCount > MAX_TEXT_PARTICLES; i++) {
-        if (this.particles[i].text) {
-          this.particles.splice(i, 1);
-          liveTextCount--;
-          i--;
-        }
-      }
+  _kill(i) {
+    this.count--;
+    if (i < this.count) {
+      const tmp = this.pool[i];
+      this.pool[i] = this.pool[this.count];
+      this.pool[this.count] = tmp;
     }
   }
 
@@ -56,27 +44,24 @@ export class Particles {
       gravity = 0,
     } = opts;
 
-    const allowed = Math.max(0, MAX_PARTICLES - this.particles.length);
-    const finalCount = Math.min(count, allowed);
+    for (let i = 0; i < count; i++) {
+      const p = this._acquire();
+      if (!p) break;
 
-    for (let i = 0; i < finalCount; i++) {
-      const angle = Math.random() * Math.PI * 2;
+      const a = Math.random() * Math.PI * 2;
       const speed = speedMin + Math.random() * (speedMax - speedMin);
 
-      this.particles.push({
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life,
-        maxLife: life,
-        size: sizeMin + Math.random() * (sizeMax - sizeMin),
-        color,
-        gravity,
-      });
+      p.x = x;
+      p.y = y;
+      p.vx = Math.cos(a) * speed;
+      p.vy = Math.sin(a) * speed;
+      p.life = life;
+      p.maxLife = life;
+      p.size = sizeMin + Math.random() * (sizeMax - sizeMin);
+      p.color = color;
+      p.gravity = gravity;
+      p.text = null;
     }
-
-    this._trimIfNeeded();
   }
 
   // Directional burst
@@ -89,77 +74,63 @@ export class Particles {
       life = 0.4,
     } = opts;
 
-    const allowed = Math.max(0, MAX_PARTICLES - this.particles.length);
-    const finalCount = Math.min(count, allowed);
+    for (let i = 0; i < count; i++) {
+      const p = this._acquire();
+      if (!p) break;
 
-    for (let i = 0; i < finalCount; i++) {
       const a = angle + (Math.random() - 0.5) * spread;
       const speed = speedMin + Math.random() * (speedMax - speedMin);
 
-      this.particles.push({
-        x,
-        y,
-        vx: Math.cos(a) * speed,
-        vy: Math.sin(a) * speed,
-        life,
-        maxLife: life,
-        size: sizeMin + Math.random() * (sizeMax - sizeMin),
-        color,
-        gravity: 0,
-      });
+      p.x = x;
+      p.y = y;
+      p.vx = Math.cos(a) * speed;
+      p.vy = Math.sin(a) * speed;
+      p.life = life;
+      p.maxLife = life;
+      p.size = sizeMin + Math.random() * (sizeMax - sizeMin);
+      p.color = color;
+      p.gravity = 0;
+      p.text = null;
     }
-
-    this._trimIfNeeded();
   }
 
   // Floating text (damage numbers)
   text(x, y, str, color = '#fff', size = 14) {
-    let textCount = 0;
-    for (const p of this.particles) {
-      if (p.text) textCount++;
-    }
+    const p = this._acquire();
+    if (!p) return;
 
-    if (textCount >= MAX_TEXT_PARTICLES) {
-      for (let i = 0; i < this.particles.length; i++) {
-        if (this.particles[i].text) {
-          this.particles.splice(i, 1);
-          break;
-        }
-      }
-    }
-
-    this.particles.push({
-      x,
-      y,
-      vx: (Math.random() - 0.5) * 20,
-      vy: -60,
-      life: 0.8,
-      maxLife: 0.8,
-      size,
-      color,
-      gravity: 0,
-      text: str,
-    });
-
-    this._trimIfNeeded();
+    p.x = x;
+    p.y = y;
+    p.vx = (Math.random() - 0.5) * 20;
+    p.vy = -60;
+    p.life = 0.8;
+    p.maxLife = 0.8;
+    p.size = size;
+    p.color = color;
+    p.gravity = 0;
+    p.text = str;
   }
 
   update(dt) {
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      const p = this.particles[i];
+    let i = 0;
+    while (i < this.count) {
+      const p = this.pool[i];
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.vy += (p.gravity || 0) * dt;
+      p.vy += p.gravity * dt;
       p.life -= dt;
 
       if (p.life <= 0) {
-        this.particles.splice(i, 1);
+        this._kill(i);
+      } else {
+        i++;
       }
     }
   }
 
   draw(ctx, camera) {
-    for (const p of this.particles) {
+    for (let i = 0; i < this.count; i++) {
+      const p = this.pool[i];
       const pos = camera.worldToScreen(p.x, p.y);
       const alpha = Math.max(0, p.life / p.maxLife);
 

@@ -1,10 +1,51 @@
-// ── Projectile / Attack entities ──
+// ── Projectile system with object pooling ──
+// Pre-allocated pool with swap-and-pop removal. Zero allocations during gameplay
+// (hitIds Sets are cleared and reused, not recreated).
 
 import { dist, angle } from './utils.js';
 
+const PROJ_POOL_SIZE = 300;
+
+function _createProjectile() {
+  return {
+    x: 0, y: 0, vx: 0, vy: 0, speed: 0,
+    damage: 0, pierce: 0, maxPierce: 0,
+    radius: 0, color: '',
+    homing: false, split: 0, explodeRadius: 0, slow: 0,
+    lifetime: 0, age: 0,
+    hitIds: new Set(),
+    chain: 0, chainRange: 0,
+    mark: false, overload: false,
+  };
+}
+
 export class ProjectileSystem {
   constructor() {
-    this.projectiles = [];
+    this.pool = new Array(PROJ_POOL_SIZE);
+    for (let i = 0; i < PROJ_POOL_SIZE; i++) {
+      this.pool[i] = _createProjectile();
+    }
+    this.count = 0;
+  }
+
+  _acquire() {
+    if (this.count >= PROJ_POOL_SIZE) return null;
+    const p = this.pool[this.count++];
+    p.hitIds.clear();
+    p.chain = 0;
+    p.chainRange = 0;
+    p.mark = false;
+    p.overload = false;
+    return p;
+  }
+
+  _kill(i) {
+    this.count--;
+    if (i < this.count) {
+      const tmp = this.pool[i];
+      this.pool[i] = this.pool[this.count];
+      this.pool[this.count] = tmp;
+    }
   }
 
   spawn(x, y, targetAngle, speed, damage, pierce, radius, color, opts = {}) {
@@ -16,47 +57,47 @@ export class ProjectileSystem {
       lifetime = 3,
     } = opts;
 
-    this.projectiles.push({
-      x, y,
-      vx: Math.cos(targetAngle) * speed,
-      vy: Math.sin(targetAngle) * speed,
-      speed,
-      damage,
-      pierce,
-      maxPierce: pierce,
-      radius,
-      color,
-      homing,
-      split,
-      explodeRadius,
-      slow,
-      lifetime,
-      age: 0,
-      hitIds: new Set(),
-    });
+    const p = this._acquire();
+    if (!p) return;
+
+    p.x = x; p.y = y;
+    p.vx = Math.cos(targetAngle) * speed;
+    p.vy = Math.sin(targetAngle) * speed;
+    p.speed = speed;
+    p.damage = damage;
+    p.pierce = pierce;
+    p.maxPierce = pierce;
+    p.radius = radius;
+    p.color = color;
+    p.homing = homing;
+    p.split = split;
+    p.explodeRadius = explodeRadius;
+    p.slow = slow;
+    p.lifetime = lifetime;
+    p.age = 0;
 
     // Split shots
     if (split > 0) {
       for (let i = 1; i <= split; i++) {
+        const sp = this._acquire();
+        if (!sp) break;
+
         const spreadAngle = targetAngle + (i % 2 === 0 ? 1 : -1) * Math.ceil(i / 2) * 0.25;
-        this.projectiles.push({
-          x, y,
-          vx: Math.cos(spreadAngle) * speed,
-          vy: Math.sin(spreadAngle) * speed,
-          speed,
-          damage: Math.round(damage * 0.6),
-          pierce: 1,
-          maxPierce: 1,
-          radius,
-          color,
-          homing: false,
-          split: 0,
-          explodeRadius: 0,
-          slow,
-          lifetime,
-          age: 0,
-          hitIds: new Set(),
-        });
+        sp.x = x; sp.y = y;
+        sp.vx = Math.cos(spreadAngle) * speed;
+        sp.vy = Math.sin(spreadAngle) * speed;
+        sp.speed = speed;
+        sp.damage = Math.round(damage * 0.6);
+        sp.pierce = 1;
+        sp.maxPierce = 1;
+        sp.radius = radius;
+        sp.color = color;
+        sp.homing = false;
+        sp.split = 0;
+        sp.explodeRadius = 0;
+        sp.slow = slow;
+        sp.lifetime = lifetime;
+        sp.age = 0;
       }
     }
   }
@@ -65,34 +106,34 @@ export class ProjectileSystem {
     if (!target) return;
 
     const a = angle({ x, y }, target);
+    const p = this._acquire();
+    if (!p) return;
 
-    this.projectiles.push({
-      x, y,
-      vx: Math.cos(a) * speed,
-      vy: Math.sin(a) * speed,
-      speed,
-      damage,
-      pierce: 1,
-      maxPierce: 1,
-      radius,
-      color,
-      homing: false,
-      split: 0,
-      explodeRadius: 0,
-      slow: 0,
-      lifetime: 2,
-      age: 0,
-      hitIds: new Set(),
-      chain: bounces,
-      chainRange: 150,
-      mark: opts.mark || false,
-      overload: opts.overload || false,
-    });
+    p.x = x; p.y = y;
+    p.vx = Math.cos(a) * speed;
+    p.vy = Math.sin(a) * speed;
+    p.speed = speed;
+    p.damage = damage;
+    p.pierce = 1;
+    p.maxPierce = 1;
+    p.radius = radius;
+    p.color = color;
+    p.homing = false;
+    p.split = 0;
+    p.explodeRadius = 0;
+    p.slow = 0;
+    p.lifetime = 2;
+    p.age = 0;
+    p.chain = bounces;
+    p.chainRange = 150;
+    p.mark = opts.mark || false;
+    p.overload = opts.overload || false;
   }
 
   update(dt, enemies, particles, onHit, grid) {
-    for (let i = this.projectiles.length - 1; i >= 0; i--) {
-      const p = this.projectiles[i];
+    let i = 0;
+    while (i < this.count) {
+      const p = this.pool[i];
       p.age += dt;
 
       // Homing
@@ -132,13 +173,14 @@ export class ProjectileSystem {
       p.y += p.vy * dt;
 
       if (p.age > p.lifetime) {
-        this.projectiles.splice(i, 1);
+        this._kill(i);
         continue;
       }
 
       const nearbyEnemies = grid.neighbors(p.x, p.y);
 
       // Check hits
+      let killed = false;
       for (const enemy of nearbyEnemies) {
         if (!enemy || enemy.hp <= 0) continue;
         if (p.hitIds.has(enemy.id)) continue;
@@ -169,29 +211,30 @@ export class ProjectileSystem {
             const a2 = angle(enemy, nextTarget);
             const bounceDmgMult = p.overload ? 1.0 : 0.7;
 
-            this.projectiles.push({
-              x: enemy.x,
-              y: enemy.y,
-              vx: Math.cos(a2) * p.speed * 1.2,
-              vy: Math.sin(a2) * p.speed * 1.2,
-              speed: p.speed * 1.2,
-              damage: Math.round(p.damage * bounceDmgMult),
-              pierce: 1,
-              maxPierce: 1,
-              radius: p.radius,
-              color: p.color,
-              homing: false,
-              split: 0,
-              explodeRadius: 0,
-              slow: p.slow,
-              lifetime: 1.5,
-              age: 0,
-              hitIds: new Set(p.hitIds),
-              chain: p.chain - 1,
-              chainRange: p.chainRange,
-              mark: p.mark || false,
-              overload: p.overload || false,
-            });
+            const cp = this._acquire();
+            if (cp) {
+              cp.x = enemy.x; cp.y = enemy.y;
+              cp.vx = Math.cos(a2) * p.speed * 1.2;
+              cp.vy = Math.sin(a2) * p.speed * 1.2;
+              cp.speed = p.speed * 1.2;
+              cp.damage = Math.round(p.damage * bounceDmgMult);
+              cp.pierce = 1;
+              cp.maxPierce = 1;
+              cp.radius = p.radius;
+              cp.color = p.color;
+              cp.homing = false;
+              cp.split = 0;
+              cp.explodeRadius = 0;
+              cp.slow = p.slow;
+              cp.lifetime = 1.5;
+              cp.age = 0;
+              cp.chain = p.chain - 1;
+              cp.chainRange = p.chainRange;
+              cp.mark = p.mark;
+              cp.overload = p.overload;
+              // Copy parent hitIds so chain doesn't re-hit
+              for (const id of p.hitIds) cp.hitIds.add(id);
+            }
           }
         }
 
@@ -213,15 +256,19 @@ export class ProjectileSystem {
 
         p.pierce--;
         if (p.pierce <= 0) {
-          this.projectiles.splice(i, 1);
+          this._kill(i);
+          killed = true;
         }
         break;
       }
+
+      if (!killed) i++;
     }
   }
 
   draw(ctx, camera) {
-    for (const p of this.projectiles) {
+    for (let i = 0; i < this.count; i++) {
+      const p = this.pool[i];
       if (!camera.isVisible(p.x, p.y)) continue;
       const pos = camera.worldToScreen(p.x, p.y);
 
@@ -236,6 +283,6 @@ export class ProjectileSystem {
   }
 
   clear() {
-    this.projectiles.length = 0;
+    this.count = 0;
   }
 }
