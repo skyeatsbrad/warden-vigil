@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Warden's Vigil</title>
-  <link rel="stylesheet" href="css/style.css?v=3">
+  <link rel="stylesheet" href="css/style.css?v=4">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -27,13 +27,15 @@
     </div>
   </div>
 
-  <!-- Touch Controls -->
-  <div id="touch-controls">
-    <canvas id="joystick"></canvas>
-  </div>
-  <div id="action-cluster">
-    <button id="panic-btn">PANIC</button>
-    <button id="ult-btn">ULT</button>
+  <!-- Mobile Touch Controls -->
+  <div id="mobile-controls">
+    <div id="joystick-area">
+      <canvas id="joystick"></canvas>
+    </div>
+    <div id="action-cluster">
+      <button id="panic-btn">PANIC</button>
+      <button id="ult-btn">ULT</button>
+    </div>
   </div>
 
   <!-- Upgrade Selection Modal -->
@@ -62,6 +64,6 @@
     <button id="restart-btn">Try Again</button>
   </div>
 
-  <script type="module" src="js/main.js?v=3"></script>
+  <script type="module" src="js/main.js?v=4"></script>
 </body>
 </html>

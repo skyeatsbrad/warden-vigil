@@ -114,28 +114,71 @@ canvas#game {
   text-shadow: 0 0 3px #000;
 }
 
-/* ── Touch Joystick ── */
-#touch-controls {
-  position: absolute;
-  bottom: 24px;
-  left: 24px;
-  z-index: 30;
+/* ── Mobile Controls ── */
+#mobile-controls {
   display: none;
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 30;
+  pointer-events: none;
 }
 
 @media (pointer: coarse) {
-  #touch-controls {
-    display: block;
-    bottom: calc(40px + env(safe-area-inset-bottom, 0px));
-    left: calc(20px + env(safe-area-inset-left, 0px));
-  }
+  #mobile-controls { display: block; }
+}
+
+#joystick-area {
+  position: absolute;
+  bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+  left: calc(20px + env(safe-area-inset-left, 0px));
+  pointer-events: auto;
 }
 
 canvas#joystick {
   opacity: 0.5;
+  display: block;
 }
 
-/* ── Upgrade Modal ── */
+#action-cluster {
+  position: absolute;
+  bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+  right: calc(14px + env(safe-area-inset-right, 0px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  pointer-events: none;
+}
+
+#action-cluster button {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  outline: 10px solid transparent;
+}
+
+#panic-btn {
+  border: 2px solid #7ec8e3;
+  background: rgba(100,200,255,0.3);
+  color: #7ec8e3;
+}
+
+#ult-btn {
+  border: 2px solid #c9a0ff;
+  background: rgba(150,100,255,0.3);
+  color: #c9a0ff;
+  font-size: 15px;
+}
 #upgrade-modal {
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -290,53 +333,6 @@ canvas#joystick {
 #reroll-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
-}
-
-/* ── Action Button Cluster ── */
-#action-cluster {
-  display: none;
-  position: absolute;
-  bottom: calc(48px + env(safe-area-inset-bottom, 0px));
-  right: calc(14px + env(safe-area-inset-right, 0px));
-  z-index: 30;
-  flex-direction: column;
-  align-items: center;
-  gap: 28px;
-  pointer-events: none;
-}
-
-@media (pointer: coarse) {
-  #action-cluster { display: flex; }
-}
-
-#action-cluster button {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  font-size: 14px;
-  font-weight: bold;
-  cursor: pointer;
-  pointer-events: auto;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  outline: 10px solid transparent;
-}
-
-#panic-btn {
-  border: 2px solid #7ec8e3;
-  background: rgba(100,200,255,0.3);
-  color: #7ec8e3;
-}
-
-#ult-btn {
-  border: 2px solid #c9a0ff;
-  background: rgba(150,100,255,0.3);
-  color: #c9a0ff;
-  font-size: 15px;
 }
 
 /* ── Title Screen ── */
@@ -535,6 +531,9 @@ body.touch-debug #action-cluster button {
 body.touch-debug #action-cluster {
   outline: 2px dashed orange;
 }
-body.touch-debug #touch-controls {
+body.touch-debug #joystick-area {
   outline: 3px dashed lime;
+}
+body.touch-debug #mobile-controls {
+  outline: 1px dashed cyan;
 }
