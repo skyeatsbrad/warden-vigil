@@ -6,6 +6,11 @@ import { Input } from './input.js';
 const canvas = document.getElementById('game');
 const joystickCanvas = document.getElementById('joystick');
 
+// Touch debug mode: append ?touchdebug to URL to visualize hit areas
+if (new URLSearchParams(window.location.search).has('touchdebug')) {
+  document.body.classList.add('touch-debug');
+}
+
 // Input
 const input = new Input(joystickCanvas);
 

@@ -550,9 +550,15 @@ export class Game {
 
     // Ultimate cooldown indicator
     if (this.state === 'playing') {
-      this._drawUltimateIndicator(ctx);
-      this._drawPanicIndicator(ctx);
-      this._drawMomentumMeter(ctx);
+      if (this._isMobile) {
+        // On mobile: update DOM button labels with cooldown state (no canvas indicators)
+        this._updateMobileButtons();
+        this._drawMomentumMeter(ctx);
+      } else {
+        this._drawUltimateIndicator(ctx);
+        this._drawPanicIndicator(ctx);
+        this._drawMomentumMeter(ctx);
+      }
       this._drawSurgeIndicator(ctx);
     }
 
@@ -1058,11 +1064,44 @@ export class Game {
     ctx.restore();
   }
 
+  _updateMobileButtons() {
+    // Update DOM button text + opacity to show cooldown state
+    const ultBtn = this._ultBtnEl;
+    if (ultBtn) {
+      const def = COMPANION_DEFS[this.selectedStarter];
+      const ready = this.ultimateCooldown <= 0;
+      if (ready) {
+        ultBtn.textContent = 'ULT';
+        ultBtn.style.opacity = '1';
+        ultBtn.style.borderColor = '#c9a0ff';
+      } else {
+        ultBtn.textContent = Math.ceil(this.ultimateCooldown).toString();
+        ultBtn.style.opacity = '0.5';
+        ultBtn.style.borderColor = '#555';
+      }
+    }
+
+    const panicBtn = this._panicBtnEl;
+    if (panicBtn) {
+      const ready = this.player.panicCooldown <= 0;
+      if (ready) {
+        panicBtn.textContent = 'PANIC';
+        panicBtn.style.opacity = '1';
+        panicBtn.style.borderColor = '#7ec8e3';
+      } else {
+        panicBtn.textContent = Math.ceil(this.player.panicCooldown).toString();
+        panicBtn.style.opacity = '0.5';
+        panicBtn.style.borderColor = '#555';
+      }
+    }
+  }
+
   _drawMomentumMeter(ctx) {
     if (this._momentum < 1) return; // Don't draw when inactive
-    const safeB = this._safeBottom || 0;
-    const x = 20;
-    const y = this.canvas.height - 60 - safeB;
+    // On mobile, draw at top-left under HUD instead of lower-left (joystick area)
+    const isMob = this._isMobile;
+    const x = isMob ? 10 : 20;
+    const y = isMob ? (70 + (this._safeTop || 0)) : (this.canvas.height - 60 - (this._safeBottom || 0));
     const w = 80;
     const h = 8;
     const tier = this._momentumTier;
@@ -1221,10 +1260,13 @@ export class Game {
 
   resize(w, h) {
     this.camera.resize(w, h);
-    // Detect touch/mobile for layout adjustments
     this._isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     this._safeTop = this._isMobile ? Math.max(20, Math.round(h * 0.04)) : 0;
     this._safeBottom = this._isMobile ? Math.max(20, Math.round(h * 0.03)) : 0;
     this._safeRight = this._isMobile ? 16 : 0;
+
+    // Cache DOM button refs for mobile cooldown updates
+    if (!this._panicBtnEl) this._panicBtnEl = document.getElementById('panic-btn');
+    if (!this._ultBtnEl) this._ultBtnEl = document.getElementById('ult-btn');
   }
 }
