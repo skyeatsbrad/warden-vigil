@@ -40,6 +40,12 @@ export class Input {
     window.addEventListener('keyup', e => {
       this.keys[e.key.toLowerCase()] = false;
     });
+    // Clear all keys when window loses focus to prevent stuck movement
+    const clearKeys = () => { for (const k in this.keys) this.keys[k] = false; };
+    window.addEventListener('blur', clearKeys);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) clearKeys();
+    });
   }
 
   _bindTouch() {

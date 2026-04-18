@@ -6,14 +6,13 @@ import { Input } from './input.js?v=4';
 const canvas = document.getElementById('game');
 const joystickCanvas = document.getElementById('joystick');
 
-// Touch debug mode: ?touchdebug in URL, or 3-finger tap anywhere to toggle on device
+// Touch debug mode: ?touchdebug in URL, or 4-finger tap anywhere to toggle on device
 if (new URLSearchParams(window.location.search).has('touchdebug')) {
   document.body.classList.add('touch-debug');
 }
 document.addEventListener('touchstart', (e) => {
-  if (e.touches.length >= 3) {
+  if (e.touches.length >= 4) {
     const on = document.body.classList.toggle('touch-debug');
-    // Brief flash to confirm activation
     const tag = document.createElement('div');
     tag.textContent = on ? 'TOUCH DEBUG ON' : 'TOUCH DEBUG OFF';
     Object.assign(tag.style, {
