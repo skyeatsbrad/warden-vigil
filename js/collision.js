@@ -36,6 +36,7 @@ export function handleProjectileHit(enemy, projectile, particles) {
     dmg = Math.round(dmg * 1.25);
   }
 
+  const actualDmg = Math.min(dmg, Math.max(0, enemy.hp));
   enemy.hp -= dmg;
   enemy.hitFlash = 0.1;
 
@@ -55,4 +56,6 @@ export function handleProjectileHit(enemy, projectile, particles) {
 
   particles.emit(enemy.x, enemy.y, 3, projectile.color || '#fff', { speedMax: 60, life: 0.2 });
   particles.text(enemy.x, enemy.y - enemy.radius, dmg.toString(), projectile.color || '#fff');
+
+  return actualDmg;
 }

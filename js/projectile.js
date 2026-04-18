@@ -16,6 +16,7 @@ function _createProjectile() {
     hitIds: new Set(),
     chain: 0, chainRange: 0,
     mark: false, overload: false,
+    sourceId: -1,
   };
 }
 
@@ -38,6 +39,7 @@ export class ProjectileSystem {
     p.overload = false;
     p.ricochet = false;
     p.volatileMark = false;
+    p.sourceId = -1;
     return p;
   }
 
@@ -58,6 +60,7 @@ export class ProjectileSystem {
       slow = 0,
       lifetime = 3,
       ricochet = false,
+      sourceId = -1,
     } = opts;
 
     const p = this._acquire();
@@ -79,6 +82,7 @@ export class ProjectileSystem {
     p.lifetime = lifetime;
     p.age = 0;
     p.ricochet = ricochet;
+    p.sourceId = sourceId;
 
     // Split shots
     if (split > 0) {
@@ -102,6 +106,7 @@ export class ProjectileSystem {
         sp.slow = slow;
         sp.lifetime = lifetime;
         sp.age = 0;
+        sp.sourceId = sourceId;
       }
     }
   }
@@ -133,6 +138,7 @@ export class ProjectileSystem {
     p.mark = opts.mark || false;
     p.overload = opts.overload || false;
     p.volatileMark = opts.volatileMark || false;
+    p.sourceId = opts.sourceId !== undefined ? opts.sourceId : -1;
   }
 
   update(dt, enemies, particles, onHit, grid) {
@@ -240,6 +246,7 @@ export class ProjectileSystem {
               cp.mark = p.mark;
               cp.overload = p.overload;
               cp.volatileMark = p.volatileMark;
+              cp.sourceId = p.sourceId;
               // Copy parent hitIds so chain doesn't re-hit
               for (const id of p.hitIds) cp.hitIds.add(id);
             }
@@ -276,7 +283,7 @@ export class ProjectileSystem {
             if (ricoTarget) {
               const ra = angle(enemy, ricoTarget);
               this.spawn(enemy.x, enemy.y, ra, p.speed, p.damage, 1, p.radius, p.color,
-                { homing: p.homing, explodeRadius: p.explodeRadius, slow: p.slow, ricochet: false });
+                { homing: p.homing, explodeRadius: p.explodeRadius, slow: p.slow, ricochet: false, sourceId: p.sourceId });
               // Carry hitIds to prevent re-hitting
               const rp = this.pool[this.count - 1];
               if (rp) for (const id of p.hitIds) rp.hitIds.add(id);

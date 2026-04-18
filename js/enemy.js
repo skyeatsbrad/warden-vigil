@@ -12,6 +12,7 @@ export class EnemySystem {
     this.spawnInterval = WAVE_CONFIG.baseInterval;
     this.bossTimer = 0;
     this.minibossTimer = 0;
+    this.curseSpeedMult = 1; // set by game.js from cursed upgrades
   }
 
   update(dt, elapsed, player, camera, grid) {
@@ -52,7 +53,7 @@ export class EnemySystem {
       const e = this.enemies[i];
       if (!e) continue;
 
-      let spd = e.speed;
+      let spd = e.speed * (this.curseSpeedMult || 1);
       if (e.slowTimer && e.slowTimer > 0) {
         spd *= 0.5;
         e.slowTimer -= dt;
@@ -312,5 +313,16 @@ export class EnemySystem {
     this.spawnInterval = WAVE_CONFIG.baseInterval;
     this.bossTimer = 0;
     this.minibossTimer = 0;
+    this.curseSpeedMult = 1;
+  }
+
+  // Force-spawn a surge burst (bypasses capacity check for initial wave)
+  triggerSurgeBurst(player, camera, elapsed) {
+    const elapsedMinutes = elapsed / 60;
+    const count = Math.min(8, 4 + Math.floor(elapsed / 90));
+    for (let i = 0; i < count; i++) {
+      const typeKey = elapsed > WAVE_CONFIG.eliteStartTime && i === 0 ? 'ravager' : 'crawler';
+      this._spawnEnemy(typeKey, player, camera, elapsedMinutes, i, count);
+    }
   }
 }

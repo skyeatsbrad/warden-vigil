@@ -22,6 +22,7 @@ export class Companion {
     this.evolutionGrants = [];    // modifier keys auto-granted by evolution
     this.stats = getCompanionStats(this.def.baseStats, 1);
     this._phase = Math.random() * Math.PI * 2; // visual variety
+    this._totalDamage = 0; // run damage tracking
   }
 
   /** Active display color (uses evolution color if evolved) */
@@ -208,7 +209,7 @@ export class Companion {
                 this.x, this.y, a + i * 0.25,
                 this.stats.projectileSpeed, damage,
                 pierce, this.stats.radius, this.color,
-                { homing: hasHoming, explodeRadius: explR, ricochet: hasRicochet }
+                { homing: hasHoming, explodeRadius: explR, ricochet: hasRicochet, sourceId: this.id }
               );
             }
           } else {
@@ -216,7 +217,7 @@ export class Companion {
               this.x, this.y, a,
               this.stats.projectileSpeed, damage,
               pierce, this.stats.radius, this.color,
-              { homing: hasHoming, explodeRadius: explR, ricochet: hasRicochet }
+              { homing: hasHoming, explodeRadius: explR, ricochet: hasRicochet, sourceId: this.id }
             );
           }
         }
@@ -234,9 +235,11 @@ export class Companion {
           for (const e of nearby) {
             if (e.hp <= 0) continue;
             if (dist(this, e) < hitRange + e.radius) {
+              const actualDmg = Math.min(damage, Math.max(0, e.hp));
               const wasAlive = e.hp > 0;
               e.hp -= damage;
               e.hitFlash = 0.1;
+              this._totalDamage += actualDmg;
               if (hasVampiric) this.owner.heal(1);
               if (wasAlive && e.hp <= 0) meleeKills++;
               particles.emit(e.x, e.y, 4, this.color, { speedMax: 80, life: 0.3 });
@@ -260,8 +263,10 @@ export class Companion {
             if (e.hp <= 0) continue;
             const d = dist(this, e);
             if (d < this.stats.range) {
+              const actualDmg = Math.min(dmg, Math.max(0, e.hp));
               e.hp -= dmg;
               e.hitFlash = 0.1;
+              this._totalDamage += actualDmg;
               if (hasSlowF) e.slowTimer = Math.max(e.slowTimer || 0, 2.0);
               // Gravity well: pull enemies toward companion
               if (hasGravity && d > 20) {
@@ -323,10 +328,12 @@ export class Companion {
 
             for (const { e } of candidates) {
               if (hits >= beamPierce) break;
+              const actualDmg = Math.min(beamDmg, Math.max(0, e.hp));
               e.hp -= beamDmg;
               e.hitFlash = 0.1;
               hits++;
               hitIds.add(e);
+              this._totalDamage += actualDmg;
               particles.text(e.x, e.y - e.radius, beamDmg.toString(), this.color, 10);
             }
             this._beamTargets.push({ x: this.x + cosA * beamLen, y: this.y + sinA * beamLen });
@@ -354,7 +361,7 @@ export class Companion {
             this.x, this.y, target,
             this.stats.projectileSpeed, chainDmg,
             chainPierce, this.stats.radius, this.color, enemies,
-            { mark: hasMark, overload: hasOverload, slow: hasAutoSlow ? 1.5 : 0, volatileMark: hasVolatile }
+            { mark: hasMark, overload: hasOverload, slow: hasAutoSlow ? 1.5 : 0, volatileMark: hasVolatile, sourceId: this.id }
           );
         }
         break;

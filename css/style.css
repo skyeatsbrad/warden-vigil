@@ -155,6 +155,7 @@ canvas#joystick {
 }
 
 .upgrade-card {
+  position: relative;
   background: rgba(30,25,50,0.9);
   border: 2px solid #6a5acd;
   border-radius: 12px;
@@ -225,6 +226,41 @@ canvas#joystick {
   0%, 100% { box-shadow: 0 0 20px rgba(255,111,0,0.5), 0 0 40px rgba(255,111,0,0.15); }
   50% { box-shadow: 0 0 28px rgba(255,111,0,0.7), 0 0 50px rgba(255,111,0,0.25); }
 }
+
+/* Cursed rarity */
+.rarity-cursed { color: #9b59b6; text-shadow: 0 0 8px rgba(155,89,182,0.6); }
+.upgrade-card.rarity-border-cursed {
+  border-color: #8e44ad;
+  box-shadow: 0 0 14px rgba(142,68,173,0.4), inset 0 0 20px rgba(80,20,80,0.3);
+  background: linear-gradient(135deg, rgba(40,10,50,0.95), rgba(30,0,30,0.9));
+  animation: cursedPulse 2.5s ease-in-out infinite;
+}
+@keyframes cursedPulse {
+  0%, 100% { box-shadow: 0 0 14px rgba(142,68,173,0.4), inset 0 0 20px rgba(80,20,80,0.3); }
+  50% { box-shadow: 0 0 22px rgba(142,68,173,0.6), inset 0 0 30px rgba(80,20,80,0.5); }
+}
+
+/* Lock button on upgrade cards */
+.lock-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 50%;
+  background: rgba(0,0,0,0.4);
+  color: #aaa;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+  pointer-events: auto;
+}
+.lock-btn:hover { background: rgba(80,60,120,0.6); border-color: rgba(255,255,255,0.4); }
+.lock-btn.locked { background: rgba(100,80,200,0.6); border-color: #ffd700; color: #ffd700; }
 
 /* Reroll button */
 #reroll-btn {

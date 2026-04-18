@@ -1,10 +1,10 @@
 // ── UI: HUD + Upgrade selection ──
 
-import { COMPANION_DEFS, DROPPABLE_COMPANIONS, MODIFIERS, getModifiersForType, EVOLUTIONS, getEvolveLevel, TRADEOFF_CARDS } from './data/companions.js';
+import { COMPANION_DEFS, DROPPABLE_COMPANIONS, MODIFIERS, getModifiersForType, EVOLUTIONS, getEvolveLevel, TRADEOFF_CARDS, CURSED_CARDS } from './data/companions.js';
 import { pick, weightedPick } from './utils.js';
 
 // Rarity weight multipliers — lower = rarer
-const RARITY_WEIGHTS = { common: 1, rare: 0.45, epic: 0.18 };
+const RARITY_WEIGHTS = { common: 1, rare: 0.45, epic: 0.18, cursed: 0.10 };
 
 export class UI {
   constructor() {
@@ -18,6 +18,9 @@ export class UI {
     this.upgradeChoices = document.getElementById('upgrade-choices');
     this.rerollBtn = document.getElementById('reroll-btn');
     this._rerolls = 0;
+    this._currentChoices = null;
+    this._lockedIndex = null;
+    this._modalHeading = this.upgradeModal.querySelector('h2');
   }
 
   updateHUD(player, elapsed) {
@@ -38,30 +41,29 @@ export class UI {
 
   showUpgradeSelection(player, companions, onSelect, guaranteedRare = false) {
     this.upgradeModal.classList.remove('hidden');
+    this._modalHeading.textContent = 'Choose an Upgrade';
     this._rerolls = 1;
+    this._lockedIndex = null;
+    this._currentChoices = null;
     this._renderChoices(player, companions, onSelect, guaranteedRare);
   }
 
-  _renderChoices(player, companions, onSelect, guaranteedRare) {
-    this.upgradeChoices.innerHTML = '';
-    const choices = this._generateChoices(player, companions, guaranteedRare);
+  showChestSelection(player, companions, onSelect) {
+    this.upgradeModal.classList.remove('hidden');
+    this._modalHeading.textContent = '🎁 Chest Opened!';
+    this._rerolls = 0;
+    this._lockedIndex = null;
+    this._currentChoices = this._generateChestChoices(player, companions);
+    this._renderCards(this._currentChoices, onSelect, false);
+    this.rerollBtn.classList.add('hidden');
+  }
 
-    for (const choice of choices) {
-      const card = document.createElement('div');
-      card.className = `upgrade-card rarity-border-${choice.rarity}`;
-      card.innerHTML = `
-        <div class="card-icon">${choice.icon}</div>
-        <div class="card-title">${choice.title}</div>
-        <div class="card-desc">${choice.desc}</div>
-        <div class="card-rarity rarity-${choice.rarity}">${choice.rarity}</div>
-      `;
-      card.addEventListener('click', () => {
-        this.upgradeModal.classList.add('hidden');
-        this.rerollBtn.classList.add('hidden');
-        onSelect(choice);
-      });
-      this.upgradeChoices.appendChild(card);
+  _renderChoices(player, companions, onSelect, guaranteedRare) {
+    if (!this._currentChoices) {
+      this._currentChoices = this._generateChoices(player, companions, guaranteedRare);
     }
+
+    this._renderCards(this._currentChoices, onSelect, true);
 
     // Reroll button
     this.rerollBtn.textContent = `Reroll (${this._rerolls})`;
@@ -72,11 +74,77 @@ export class UI {
     this.rerollBtn.replaceWith(freshBtn);
     this.rerollBtn = freshBtn;
     freshBtn.addEventListener('click', () => {
-      if (this._rerolls > 0) {
-        this._rerolls--;
-        this._renderChoices(player, companions, onSelect, guaranteedRare);
+      if (this._rerolls <= 0) return;
+      this._rerolls--;
+
+      const newAll = this._generateChoices(player, companions, guaranteedRare);
+      if (this._lockedIndex !== null) {
+        const locked = this._currentChoices[this._lockedIndex];
+        const others = newAll.filter(c => c.title !== locked.title);
+        const rebuilt = [];
+        let otherIdx = 0;
+        for (let i = 0; i < this._currentChoices.length; i++) {
+          if (i === this._lockedIndex) {
+            rebuilt.push(locked);
+          } else {
+            rebuilt.push(others[otherIdx] || newAll[otherIdx] || this._currentChoices[i]);
+            otherIdx++;
+          }
+        }
+        this._currentChoices = rebuilt;
+      } else {
+        this._currentChoices = newAll;
       }
+      this._renderChoices(player, companions, onSelect, guaranteedRare);
     });
+  }
+
+  _renderCards(choices, onSelect, showLock) {
+    this.upgradeChoices.innerHTML = '';
+
+    for (let idx = 0; idx < choices.length; idx++) {
+      const choice = choices[idx];
+      const isLocked = this._lockedIndex === idx;
+      const card = document.createElement('div');
+      card.className = `upgrade-card rarity-border-${choice.rarity}`;
+      card.innerHTML = `
+        <div class="card-icon">${choice.icon}</div>
+        <div class="card-title">${choice.title}</div>
+        <div class="card-desc">${choice.desc}</div>
+        <div class="card-rarity rarity-${choice.rarity}">${choice.rarity}</div>
+        ${showLock ? `<button class="lock-btn${isLocked ? ' locked' : ''}" data-idx="${idx}">${isLocked ? '🔒' : '🔓'}</button>` : ''}
+      `;
+      card.addEventListener('click', (e) => {
+        if (e.target.classList.contains('lock-btn')) return;
+        this.upgradeModal.classList.add('hidden');
+        this.rerollBtn.classList.add('hidden');
+        this._currentChoices = null;
+        this._lockedIndex = null;
+        onSelect(choice);
+      });
+
+      // Lock button handler
+      if (showLock) {
+        const lockBtn = card.querySelector('.lock-btn');
+        if (lockBtn) {
+          lockBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (this._lockedIndex === idx) {
+              this._lockedIndex = null;
+            } else {
+              this._lockedIndex = idx;
+            }
+            // Re-render lock state
+            this.upgradeChoices.querySelectorAll('.lock-btn').forEach((btn, i) => {
+              btn.textContent = this._lockedIndex === i ? '🔒' : '🔓';
+              btn.classList.toggle('locked', this._lockedIndex === i);
+            });
+          });
+        }
+      }
+
+      this.upgradeChoices.appendChild(card);
+    }
   }
 
   hideUpgrade() {
@@ -88,12 +156,11 @@ export class UI {
   showEvolutionChoice(companion, onSelect) {
     this.upgradeModal.classList.remove('hidden');
     this.rerollBtn.classList.add('hidden');
+    this._modalHeading.textContent = '⚡ EVOLUTION!';
     this.upgradeChoices.innerHTML = '';
 
     const evo = EVOLUTIONS[companion.key];
     if (!evo) return;
-
-    const baseName = companion.evolutionDef ? companion.evolutionDef.name : companion.def.name;
 
     for (const path of ['a', 'b']) {
       const e = evo[path];
@@ -126,14 +193,16 @@ export class UI {
       `;
       card.addEventListener('click', () => {
         this.upgradeModal.classList.add('hidden');
+        this._modalHeading.textContent = 'Choose an Upgrade';
         onSelect(path);
       });
       this.upgradeChoices.appendChild(card);
     }
   }
 
-  _generateChoices(player, companions, guaranteedRare) {
-    const choices = [];
+  // ── Pool building (shared between normal + chest selections) ──
+
+  _buildUpgradePool(player, companions) {
     const pool = [];
 
     // ── New companion ──
@@ -175,7 +244,6 @@ export class UI {
     for (const c of companions) {
       if (c.modifiers.length >= 2) continue;
       const compatibleKeys = getModifiersForType(c.def.attack);
-      // Filter out modifiers already owned or auto-granted by evolution
       const availMods = compatibleKeys.filter(m => !c.modifiers.includes(m) && !c.evolutionGrants.includes(m));
       for (const modKey of availMods) {
         const mod = MODIFIERS[modKey];
@@ -206,6 +274,26 @@ export class UI {
       });
     }
 
+    // ── Cursed cards (greed mechanic) ──
+    for (const cc of CURSED_CARDS) {
+      if (!this._pickedTradeoffs) this._pickedTradeoffs = new Set();
+      if (this._pickedTradeoffs.has(cc.id)) continue;
+      pool.push({
+        type: 'cursed', cursedId: cc.id,
+        icon: cc.icon,
+        title: cc.title,
+        desc: cc.desc,
+        rarity: 'cursed',
+        weight: 2 * RARITY_WEIGHTS.cursed,
+      });
+    }
+
+    return pool;
+  }
+
+  _generateChoices(player, companions, guaranteedRare) {
+    const pool = this._buildUpgradePool(player, companions);
+
     // ── Common stat boosts ──
     pool.push({
       type: 'stat', stat: 'speed', value: 18,
@@ -229,7 +317,7 @@ export class UI {
       weight: player.hp < player.maxHp * 0.45 ? 4 : 0.5,
     });
 
-    // ── Epic stat boosts (meaningfully stronger) ──
+    // ── Epic stat boosts ──
     pool.push({
       type: 'stat', stat: 'speed', value: 40,
       icon: '⚡', title: "Warden's Haste", desc: '+40 movement speed',
@@ -244,16 +332,42 @@ export class UI {
     // ── Guaranteed rare filter ──
     let filtered = pool;
     if (guaranteedRare) {
-      const rareOrAbove = pool.filter(c => c.rarity === 'rare' || c.rarity === 'epic');
+      const rareOrAbove = pool.filter(c => c.rarity === 'rare' || c.rarity === 'epic' || c.rarity === 'cursed');
       if (rareOrAbove.length >= 3) filtered = rareOrAbove;
     }
 
     // Pick 3 unique choices
+    const choices = [];
     while (choices.length < 3 && filtered.length > 0) {
       const weights = filtered.map(c => c.weight);
       const selected = weightedPick(filtered, weights);
       choices.push(selected);
       filtered.splice(filtered.indexOf(selected), 1);
+    }
+
+    return choices;
+  }
+
+  _generateChestChoices(player, companions) {
+    const pool = this._buildUpgradePool(player, companions);
+    if (pool.length === 0) return this._generateChoices(player, companions, true);
+
+    const choices = [];
+
+    // Force at least 1 epic/cursed
+    const epics = pool.filter(c => c.rarity === 'epic' || c.rarity === 'cursed');
+    if (epics.length > 0) {
+      const epic = pick(epics);
+      choices.push(epic);
+      pool.splice(pool.indexOf(epic), 1);
+    }
+
+    // Fill remaining from pool
+    while (choices.length < 3 && pool.length > 0) {
+      const weights = pool.map(c => c.weight);
+      const selected = weightedPick(pool, weights);
+      choices.push(selected);
+      pool.splice(pool.indexOf(selected), 1);
     }
 
     return choices;

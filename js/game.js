@@ -11,7 +11,7 @@ import { UI } from './ui.js';
 import { Progression } from './progression.js';
 import { processCollisions, handleProjectileHit } from './collision.js';
 import { SpatialGrid } from './spatial-grid.js';
-import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, EVOLUTIONS, getEvolveLevel } from './data/companions.js';
+import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel } from './data/companions.js';
 import { formatTime, dist, weightedPick } from './utils.js';
 
 export class Game {
@@ -56,9 +56,31 @@ export class Game {
     // Momentum system
     this._momentum = 0;
     this._momentumTier = 0;
+    this._maxMomentumTier = 0;
 
     // Void burst pickup
     this._voidBurstKills = 0;
+
+    // Surge / pressure spike system
+    this._surgeTimer = 0;
+    this._surgeActive = false;
+    this._surgeRemaining = 0;
+    this._surgeCount = 0;
+    this._surgesCompleted = 0;
+    this._surgeWarningShown = false;
+    this._surgeWarningTime = 0;
+
+    // Chest system
+    this._pendingChests = 0;
+
+    // Cursed upgrade effects
+    this._curseSpawnMult = 1;
+    this._curseDrainPerSec = 0;
+    this._curseEnemySpeedMult = 1;
+    this._curseDrainAccum = 0;
+
+    // Run stats
+    this._totalDamageDealt = 0;
 
     // Frame pressure tracking for adaptive quality
     this._smoothedDt = 0.016;
@@ -155,7 +177,21 @@ export class Game {
     this._bioHealTimer = 0;
     this._momentum = 0;
     this._momentumTier = 0;
+    this._maxMomentumTier = 0;
     this._voidBurstKills = 0;
+    this._surgeTimer = 0;
+    this._surgeActive = false;
+    this._surgeRemaining = 0;
+    this._surgeCount = 0;
+    this._surgesCompleted = 0;
+    this._surgeWarningShown = false;
+    this._surgeWarningTime = 0;
+    this._pendingChests = 0;
+    this._curseSpawnMult = 1;
+    this._curseDrainPerSec = 0;
+    this._curseEnemySpeedMult = 1;
+    this._curseDrainAccum = 0;
+    this._totalDamageDealt = 0;
     this.ui._pickedTradeoffs = new Set();
     this.camera.reset(0, 0);
 
@@ -188,6 +224,7 @@ export class Game {
     this._momentum = Math.max(0, this._momentum - 2 * dt);
     const newTier = this._momentum >= 50 ? 3 : this._momentum >= 25 ? 2 : this._momentum >= 10 ? 1 : 0;
     this._momentumTier = newTier;
+    if (newTier > this._maxMomentumTier) this._maxMomentumTier = newTier;
     const momentumDmgMult = newTier >= 2 ? 1.15 : 1;
 
     // Set momentum damage multiplier on each companion
@@ -215,12 +252,60 @@ export class Game {
     // Orbit damage
     processOrbitDamage(this.companions, this.enemySystem.enemies, this.particles, dt, grid);
 
+    // ── Surge / pressure spike system ──
+    this._surgeTimer += dt;
+    if (!this._surgeActive && this._surgeTimer >= 90) {
+      // Trigger surge
+      this._surgeActive = true;
+      this._surgeRemaining = 15;
+      this._surgeCount++;
+      this._surgeTimer = 0;
+      this._surgeWarningShown = true;
+      this._surgeWarningTime = 2.0;
+      this.enemySystem.triggerSurgeBurst(this.player, this.camera, this.elapsed);
+      this.particles.text(this.player.x, this.player.y - 40, '⚠ SURGE!', '#ff4444', 20);
+      this.camera.applyShake();
+    }
+    if (this._surgeActive) {
+      this._surgeRemaining -= dt;
+      // Faster spawning during surge: extra spawn ticks
+      this.enemySystem.spawnTimer -= dt; // double speed: normal dt + this extra dt
+      if (this._surgeRemaining <= 0) {
+        this._surgeActive = false;
+        this._surgesCompleted++;
+        this.particles.text(this.player.x, this.player.y - 40, 'SURGE CLEAR!', '#2ecc71', 16);
+      }
+    }
+    if (this._surgeWarningTime > 0) this._surgeWarningTime -= dt;
+
+    // Apply curse spawn rate multiplier
+    if (this._curseSpawnMult !== 1) {
+      this.enemySystem.spawnTimer -= dt * (1 / this._curseSpawnMult - 1);
+    }
+
+    // Apply curse enemy speed
+    this.enemySystem.curseSpeedMult = this._curseEnemySpeedMult;
+
+    // Curse HP drain
+    if (this._curseDrainPerSec > 0) {
+      this._curseDrainAccum += this._curseDrainPerSec * dt;
+      while (this._curseDrainAccum >= 1) {
+        this._curseDrainAccum -= 1;
+        this.player.hp = Math.max(1, this.player.hp - 1);
+      }
+    }
+
     // Enemies
     this.enemySystem.update(dt, this.elapsed, this.player, this.camera, grid);
 
-    // Projectiles
+    // Projectiles — track damage for source companions
     this.projectiles.update(dt, this.enemySystem.enemies, this.particles, (enemy, proj) => {
-      handleProjectileHit(enemy, proj, this.particles);
+      const actualDmg = handleProjectileHit(enemy, proj, this.particles);
+      this._totalDamageDealt += actualDmg;
+      if (proj.sourceId >= 0) {
+        const c = this.companions.find(c => c.id === proj.sourceId);
+        if (c) c._totalDamage += actualDmg;
+      }
     }, grid);
 
     // Collisions (player vs nearby enemies via grid)
@@ -260,6 +345,10 @@ export class Game {
         if (isElite) {
           this.camera.applyShake();
           this._spawnPickup(e.x, e.y);
+          // 35% chance to also drop a chest
+          if (Math.random() < 0.35) {
+            this.pickups.push({ type: 'chest', x: e.x + 15, y: e.y, radius: 12, life: 20, age: 0 });
+          }
         }
 
         // Void burst: next N kills explode for AoE
@@ -328,6 +417,9 @@ export class Game {
   }
 
   _showNextUpgrade() {
+    // Prevent re-entry when already upgrading
+    if (this.state === 'upgrading') return;
+
     // Handle pending evolution first (guaranteed 2-card event)
     if (this._pendingEvolution) {
       const c = this._pendingEvolution;
@@ -337,6 +429,19 @@ export class Game {
         c.evolve(path, this.synergies, this.tradeoffs);
         this.particles.emit(c.x, c.y, 20, c.evolutionDef.color, { speedMax: 150, life: 0.6 });
         this.particles.text(c.x, c.y - 20, `${c.evolutionDef.name}!`, c.evolutionDef.color);
+        this.state = 'playing';
+        this._showNextUpgrade();
+      });
+      return;
+    }
+
+    // Handle pending chests (guaranteed epic power spike)
+    if (this._pendingChests > 0) {
+      this._pendingChests--;
+      this.state = 'upgrading';
+      this.ui.showChestSelection(this.player, this.companions, choice => {
+        this._applyUpgrade(choice);
+        this.state = 'playing';
         this._showNextUpgrade();
       });
       return;
@@ -351,6 +456,7 @@ export class Game {
     this.ui.showUpgradeSelection(this.player, this.companions, choice => {
       this._applyUpgrade(choice);
       this.guaranteedRare = false;
+      this.state = 'playing';
       this._showNextUpgrade();
     }, this.guaranteedRare);
   }
@@ -397,6 +503,7 @@ export class Game {
       this._drawUltimateIndicator(ctx);
       this._drawPanicIndicator(ctx);
       this._drawMomentumMeter(ctx);
+      this._drawSurgeIndicator(ctx);
     }
 
     // Joystick
@@ -605,6 +712,26 @@ export class Game {
       case 'heal':
         this.player.heal(choice.value);
         break;
+
+      case 'cursed':
+        {
+          const cc = CURSED_CARDS.find(c => c.id === choice.cursedId);
+          if (cc) {
+            const eff = cc.effects;
+            if (eff.allDamageMult) this.tradeoffs.allDamageMult *= eff.allDamageMult;
+            if (eff.allCooldownMult) this.tradeoffs.allCooldownMult *= eff.allCooldownMult;
+            if (eff.maxHpAdd) {
+              this.player.maxHp += eff.maxHpAdd;
+              this.player.heal(eff.maxHpAdd);
+            }
+            if (eff.curseSpawnMult) this._curseSpawnMult *= eff.curseSpawnMult;
+            if (eff.curseDrainPerSec) this._curseDrainPerSec += eff.curseDrainPerSec;
+            if (eff.curseEnemySpeedMult) this._curseEnemySpeedMult *= eff.curseEnemySpeedMult;
+            this.ui._pickedTradeoffs.add(cc.id);
+            this._recomputeAllStats();
+          }
+        }
+        break;
     }
   }
 
@@ -614,10 +741,15 @@ export class Game {
       const cat = c.def.category;
       counts[cat] = (counts[cat] || 0) + 1;
     }
+    const oldSynergies = this.synergies;
     this.synergies = {};
     for (const [cat, def] of Object.entries(SYNERGY_DEFS)) {
       if ((counts[cat] || 0) >= 2) {
         this.synergies[cat] = def;
+        // Notify on newly activated synergy
+        if (!oldSynergies[cat] && this.player) {
+          this.particles.text(this.player.x, this.player.y - 50, `⚡ ${def.label}`, '#ffd700', 16);
+        }
       }
     }
   }
@@ -681,6 +813,15 @@ export class Game {
         this.particles.text(this.player.x, this.player.y - 20, 'VOID BURST!', '#8e44ad');
         this.particles.emit(this.player.x, this.player.y, 15, '#8e44ad', { speedMax: 100, life: 0.6 });
         break;
+      case 'chest':
+        this._pendingChests++;
+        this.particles.text(this.player.x, this.player.y - 20, '🎁 CHEST!', '#ffd700', 18);
+        this.particles.emit(this.player.x, this.player.y, 15, '#ffd700', { speedMax: 100, life: 0.5 });
+        // Trigger chest selection if not already upgrading
+        if (this.state === 'playing') {
+          this._showNextUpgrade();
+        }
+        break;
     }
   }
 
@@ -688,9 +829,11 @@ export class Game {
     const PICKUP_COLORS = {
       heal: '#2ecc71', frenzy_core: '#f39c12',
       essence_surge: '#9b59b6', rare_token: '#e74c3c', void_burst: '#8e44ad',
+      chest: '#ffd700',
     };
     const PICKUP_ICONS = {
       heal: '✚', frenzy_core: '⚡', essence_surge: '✦', rare_token: '★', void_burst: '◈',
+      chest: '🎁',
     };
     for (const p of this.pickups) {
       if (!cam.isVisible(p.x, p.y, 15)) continue;
@@ -822,6 +965,27 @@ export class Game {
     const labels = ['', '⚡SPD', '⚡SPD 🗡DMG', '⚡SPD 🗡DMG ✧MAG'];
     ctx.fillText(tier > 0 ? labels[tier] : 'MOMENTUM', x, y - 2);
   }
+
+  _drawSurgeIndicator(ctx) {
+    if (!this._surgeActive && this._surgeWarningTime <= 0) return;
+
+    if (this._surgeActive) {
+      // Red pulsing border during surge
+      const pulse = Math.sin(performance.now() * 0.006) * 0.3 + 0.4;
+      ctx.strokeStyle = `rgba(255,50,50,${pulse})`;
+      ctx.lineWidth = 4;
+      ctx.strokeRect(2, 2, this.canvas.width - 4, this.canvas.height - 4);
+
+      // Surge timer
+      ctx.fillStyle = '#ff4444';
+      ctx.font = 'bold 14px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(`⚠ SURGE ${Math.ceil(this._surgeRemaining)}s`, this.canvas.width / 2, 50);
+    }
+  }
+
+  _gameOver() {
     this.state = 'gameover';
     this.pendingUpgrades = 0;
 
@@ -843,14 +1007,80 @@ export class Game {
 
     this.progression.recordRun(this.player.kills, this.elapsed);
 
+    // ── Build label + stats ──
+    const buildLabel = this._computeBuildLabel();
+    const topCompanion = this.companions.reduce((best, c) =>
+      c._totalDamage > (best ? best._totalDamage : 0) ? c : best, null);
+    const topName = topCompanion
+      ? (topCompanion.evolutionDef ? topCompanion.evolutionDef.name : topCompanion.def.name)
+      : '—';
+    const activeSynergies = Object.values(this.synergies).map(s => s.label);
+    const curseNames = [];
+    for (const cc of CURSED_CARDS) {
+      if (this.ui._pickedTradeoffs && this.ui._pickedTradeoffs.has(cc.id)) curseNames.push(cc.title);
+    }
+
+    const momentumLabels = ['None', 'Bronze', 'Silver', 'Gold'];
+
     const statsEl = document.getElementById('run-stats');
     statsEl.innerHTML = `
+      <div style="font-size:20px;color:#ffd700;margin-bottom:8px">${buildLabel}</div>
+      <div style="font-size:12px;color:#aaa;margin-bottom:12px">Build Identity</div>
       Time survived: <strong>${formatTime(this.elapsed)}</strong><br>
       Level reached: <strong>${this.player.level}</strong><br>
       Enemies slain: <strong>${this.player.kills}</strong><br>
-      Companions: <strong>${this.companions.map(c => c.def.name).join(', ')}</strong>
+      Total damage: <strong>${Math.round(this._totalDamageDealt).toLocaleString()}</strong><br>
+      Top source: <strong>${topName}</strong><br>
+      Surges survived: <strong>${this._surgesCompleted}/${this._surgeCount}</strong><br>
+      Peak momentum: <strong>${momentumLabels[this._maxMomentumTier]}</strong><br>
+      ${activeSynergies.length > 0 ? `Synergies: <strong style="color:#ffd700">${activeSynergies.join(', ')}</strong><br>` : ''}
+      ${curseNames.length > 0 ? `Curses: <strong style="color:#9b59b6">${curseNames.join(', ')}</strong><br>` : ''}
+      <div style="margin-top:8px;font-size:12px;color:#888">
+        ${this.companions.map(c => {
+          const n = c.evolutionDef ? c.evolutionDef.name : c.def.name;
+          const dmg = Math.round(c._totalDamage).toLocaleString();
+          const mods = c.modifiers.length > 0 ? ` [${c.modifiers.join(', ')}]` : '';
+          return `${n} Lv${c.level}: ${dmg} dmg${mods}`;
+        }).join('<br>')}
+      </div>
     `;
     document.getElementById('gameover-screen').classList.remove('hidden');
+  }
+
+  _computeBuildLabel() {
+    const typeCounts = {};
+    for (const c of this.companions) {
+      const t = c.def.attack;
+      typeCounts[t] = (typeCounts[t] || 0) + 1;
+    }
+    const dominant = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0];
+    const dtype = dominant ? dominant[0] : 'unknown';
+
+    // Check for notable modifiers to refine label
+    const allMods = new Set();
+    for (const c of this.companions) {
+      for (const m of c.modifiers) allMods.add(m);
+      for (const m of c.evolutionGrants) allMods.add(m);
+    }
+
+    const labels = {
+      projectile: allMods.has('split_bloom') ? 'Shotgun Barrage' :
+                   allMods.has('homing') ? 'Tracking Arsenal' :
+                   allMods.has('ricochet') ? 'Ricochet Storm' : 'Gunner',
+      melee: allMods.has('vampiric') ? 'Bloodthirst Brawler' :
+             allMods.has('cleave') ? 'Cleave Master' : 'Melee Brawler',
+      beam: allMods.has('fork_beam') ? 'Prismatic Laser' :
+            allMods.has('searing_lance') ? 'Death Ray' : 'Beam Focus',
+      chain: allMods.has('volatile_mark') ? 'Chain Reaction' :
+             allMods.has('overload') ? 'Overload Cascade' : 'Lightning Weaver',
+      aura: allMods.has('gravity_well') ? 'Gravity Vortex' :
+            allMods.has('pulse_echo') ? 'Pulse Destroyer' : 'Aura Controller',
+      orbit: allMods.has('contact_burn') ? 'Burning Shield' : 'Orbit Guard',
+    };
+
+    const base = labels[dtype] || 'Warden';
+    const hasCurse = this._curseDrainPerSec > 0 || this._curseSpawnMult < 1 || this._curseEnemySpeedMult > 1;
+    return hasCurse ? `Cursed ${base}` : base;
   }
 
   resize(w, h) {

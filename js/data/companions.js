@@ -380,3 +380,27 @@ export const TRADEOFF_CARDS = [
     effects: { allPierceAdd: 2, allRangeMult: 0.85 },
   },
 ];
+
+// ── Cursed upgrades (greed mechanic) ──
+// High-power effects with serious downsides that affect game-level state.
+
+export const CURSED_CARDS = [
+  {
+    id: 'cursed_vitality', icon: '💀', title: 'Cursed Vitality',
+    desc: '+60 max HP & full heal. Enemies spawn 20% faster.',
+    rarity: 'cursed',
+    effects: { maxHpAdd: 60, curseSpawnMult: 0.8 },
+  },
+  {
+    id: 'dark_pact', icon: '🩸', title: 'Dark Pact',
+    desc: 'All companions +50% damage. Lose 1 HP every 2 seconds.',
+    rarity: 'cursed',
+    effects: { allDamageMult: 1.5, curseDrainPerSec: 0.5 },
+  },
+  {
+    id: 'chaos_engine', icon: '⚙', title: 'Chaos Engine',
+    desc: 'All companions −35% cooldown. Enemies are 25% faster.',
+    rarity: 'cursed',
+    effects: { allCooldownMult: 0.65, curseEnemySpeedMult: 1.25 },
+  },
+];
