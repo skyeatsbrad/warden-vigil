@@ -179,6 +179,13 @@ canvas#joystick {
   color: #c9a0ff;
   font-size: 15px;
 }
+
+#action-cluster button.on-cooldown {
+  opacity: 0.45;
+  border-color: #444;
+  background: rgba(40,40,40,0.4);
+}
+
 #upgrade-modal {
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;

@@ -1065,23 +1065,23 @@ export class Game {
     const ultBtn = this._ultBtnEl;
     if (ultBtn) {
       const ready = this.ultimateCooldown <= 0;
-      ultBtn.textContent = ready ? 'ULT' : Math.ceil(this.ultimateCooldown).toString();
-      ultBtn.style.opacity = ready ? '1' : '0.45';
-      ultBtn.style.borderColor = ready ? '#c9a0ff' : '#444';
-      ultBtn.style.background = ready
-        ? 'rgba(150,100,255,0.3)'
-        : 'rgba(40,40,40,0.4)';
+      const cd = ready ? 0 : Math.ceil(this.ultimateCooldown);
+      if (this._ultLastCd !== cd) {
+        this._ultLastCd = cd;
+        ultBtn.textContent = ready ? 'ULT' : cd.toString();
+        ultBtn.classList.toggle('on-cooldown', !ready);
+      }
     }
 
     const panicBtn = this._panicBtnEl;
     if (panicBtn) {
       const ready = this.player.panicCooldown <= 0;
-      panicBtn.textContent = ready ? 'PANIC' : Math.ceil(this.player.panicCooldown).toString();
-      panicBtn.style.opacity = ready ? '1' : '0.45';
-      panicBtn.style.borderColor = ready ? '#7ec8e3' : '#444';
-      panicBtn.style.background = ready
-        ? 'rgba(100,200,255,0.3)'
-        : 'rgba(40,40,40,0.4)';
+      const cd = ready ? 0 : Math.ceil(this.player.panicCooldown);
+      if (this._panicLastCd !== cd) {
+        this._panicLastCd = cd;
+        panicBtn.textContent = ready ? 'PANIC' : cd.toString();
+        panicBtn.classList.toggle('on-cooldown', !ready);
+      }
     }
   }
 
@@ -1265,5 +1265,7 @@ export class Game {
     // Cache DOM button refs for mobile cooldown updates
     if (!this._panicBtnEl) this._panicBtnEl = document.getElementById('panic-btn');
     if (!this._ultBtnEl) this._ultBtnEl = document.getElementById('ult-btn');
+    this._ultLastCd = -1;
+    this._panicLastCd = -1;
   }
 }
