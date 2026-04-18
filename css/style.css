@@ -301,7 +301,7 @@ canvas#joystick {
   z-index: 30;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 28px;
   pointer-events: none;
 }
 
@@ -310,10 +310,10 @@ canvas#joystick {
 }
 
 #action-cluster button {
-  width: 72px;
-  height: 72px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: bold;
   cursor: pointer;
   pointer-events: auto;
@@ -323,7 +323,7 @@ canvas#joystick {
   display: flex;
   align-items: center;
   justify-content: center;
-  outline: 8px solid transparent;
+  outline: 10px solid transparent;
 }
 
 #panic-btn {
@@ -336,7 +336,7 @@ canvas#joystick {
   border: 2px solid #c9a0ff;
   background: rgba(150,100,255,0.3);
   color: #c9a0ff;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 /* ── Title Screen ── */
