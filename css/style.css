@@ -214,6 +214,17 @@ canvas#joystick {
   box-shadow: 0 0 14px rgba(231,76,60,0.35);
   background: rgba(50,20,30,0.9);
 }
+.upgrade-card.rarity-border-legendary {
+  border-color: #ff6f00;
+  box-shadow: 0 0 20px rgba(255,111,0,0.5), 0 0 40px rgba(255,111,0,0.15);
+  background: linear-gradient(135deg, rgba(50,30,10,0.95), rgba(60,20,0,0.9));
+  animation: legendaryPulse 2s ease-in-out infinite;
+}
+.rarity-legendary { color: #ff6f00; text-shadow: 0 0 8px rgba(255,111,0,0.6); }
+@keyframes legendaryPulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(255,111,0,0.5), 0 0 40px rgba(255,111,0,0.15); }
+  50% { box-shadow: 0 0 28px rgba(255,111,0,0.7), 0 0 50px rgba(255,111,0,0.25); }
+}
 
 /* Reroll button */
 #reroll-btn {

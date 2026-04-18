@@ -179,3 +179,192 @@ export function getModifiersForType(attackType) {
     .filter(([, m]) => m.attackTypes.includes(attackType))
     .map(([key]) => key);
 }
+
+// ── Evolution paths (2 per companion) ──
+// Starters evolve at level 5, recruited companions at level 4.
+// Each path grants stat multipliers and may auto-grant modifier effects.
+
+export function getEvolveLevel(key) {
+  return STARTER_COMPANIONS.includes(key) ? 5 : 4;
+}
+
+export const EVOLUTIONS = {
+  glintbug: {
+    a: {
+      name: 'Sunburst', icon: '☼', color: '#ffcc00',
+      desc: 'Slower shots that explode on impact',
+      statMult: { damage: 1.8, cooldown: 1.6 },
+      grants: ['detonate'],
+    },
+    b: {
+      name: 'Swarm Spark', icon: '⁂', color: '#ffe066',
+      desc: 'Rapid-fire fan of light sparks',
+      statMult: { damage: 0.6, cooldown: 0.4 },
+      grants: ['split_bloom'],
+    },
+  },
+  rustmaw: {
+    a: {
+      name: 'Ironjaw', icon: '⚙', color: '#778899',
+      desc: 'Massive, slow hits with extended reach',
+      statMult: { damage: 2.5, cooldown: 1.8 },
+      statAdd: { range: 25 },
+    },
+    b: {
+      name: 'Bladestorm', icon: '⚙', color: '#c0c0c0',
+      desc: 'Rapid whirling slashes',
+      statMult: { damage: 0.65, cooldown: 0.35, speed: 1.5 },
+    },
+  },
+  nullwisp: {
+    a: {
+      name: 'Void Maw', icon: '◈', color: '#6a0dad',
+      desc: 'Concentrated kill-zone aura',
+      statMult: { damage: 2.5, range: 0.65 },
+    },
+    b: {
+      name: 'Phase Shroud', icon: '◈', color: '#b388ff',
+      desc: 'Huge aura that slows enemies',
+      statMult: { damage: 0.7, range: 1.8 },
+      grants: ['slow_field'],
+    },
+  },
+  thornvine: {
+    a: {
+      name: 'Thorn Cannon', icon: '❋', color: '#1b8a3e',
+      desc: 'Heavy piercing beams',
+      statMult: { damage: 2, cooldown: 1.8 },
+      statAdd: { pierce: 3 },
+    },
+    b: {
+      name: 'Root Web', icon: '❋', color: '#66bb6a',
+      desc: 'Rapid wide-reaching beams',
+      statMult: { damage: 0.7, cooldown: 0.5, range: 1.5 },
+    },
+  },
+  prismoth: {
+    a: {
+      name: 'Crystal Barrage', icon: '◇', color: '#64b5f6',
+      desc: 'Machine-gun crystal shards',
+      statMult: { damage: 0.5, cooldown: 0.35 },
+      statAdd: { pierce: 2 },
+    },
+    b: {
+      name: 'Prismatic Lance', icon: '◇', color: '#1565c0',
+      desc: 'Slow homing sniper bolts',
+      statMult: { damage: 3, cooldown: 2.5 },
+      grants: ['homing'],
+    },
+  },
+  embercell: {
+    a: {
+      name: 'Inferno Core', icon: '▣', color: '#ff6600',
+      desc: 'Fast-burning orbit',
+      statMult: { damage: 1.8, speed: 1.5 },
+      grants: ['contact_burn'],
+    },
+    b: {
+      name: 'Molten Shield', icon: '▣', color: '#ffab40',
+      desc: 'Wide protective ring',
+      statMult: { damage: 0.7 },
+      statAdd: { range: 50 },
+      grants: ['wider_ring'],
+    },
+  },
+  sporeloom: {
+    a: {
+      name: 'Blight Cloud', icon: '❂', color: '#00897b',
+      desc: 'Intense concentrated poison',
+      statMult: { damage: 2.5, range: 0.7 },
+    },
+    b: {
+      name: 'Healing Spores', icon: '❂', color: '#80cbc4',
+      desc: 'Weaker aura that heals the Warden',
+      statMult: { damage: 0.5, range: 1.5 },
+      grants: ['heal_pulse'],
+    },
+  },
+  voidlance: {
+    a: {
+      name: 'Oblivion Bolt', icon: '⟐', color: '#7b1fa2',
+      desc: 'Exploding void projectiles',
+      statMult: { damage: 1.5 },
+      grants: ['detonate'],
+    },
+    b: {
+      name: 'Void Gatling', icon: '⟐', color: '#ce93d8',
+      desc: 'Rapid-fire void stream',
+      statMult: { damage: 0.4, cooldown: 0.3, projectileSpeed: 1.5 },
+    },
+  },
+  solsentry: {
+    a: {
+      name: 'Solar Fortress', icon: '☀', color: '#ff8f00',
+      desc: 'Fan-spread turret',
+      statMult: { damage: 1.8, cooldown: 1.4 },
+      grants: ['split_bloom'],
+    },
+    b: {
+      name: 'Lightspeed', icon: '☀', color: '#fff176',
+      desc: 'Ultra-rapid light pulses',
+      statMult: { damage: 0.6, cooldown: 0.25, projectileSpeed: 1.8 },
+    },
+  },
+  hexweaver: {
+    a: {
+      name: 'Storm Conduit', icon: '⬡', color: '#1976d2',
+      desc: 'Massive chain reach',
+      statMult: { damage: 1.5 },
+      statAdd: { pierce: 4 },
+      grants: ['chain_arc'],
+    },
+    b: {
+      name: 'Hex Snare', icon: '⬡', color: '#4fc3f7',
+      desc: 'Chains that slow enemies',
+      statMult: { damage: 0.8 },
+      statAdd: { pierce: 2 },
+      grants: ['auto_slow'],
+    },
+  },
+};
+
+// ── Category synergy bonuses ──
+// Active when 2+ companions share a category.
+
+export const SYNERGY_DEFS = {
+  Solar:      { label: 'Solar Resonance',  desc: '+20% damage',   damageMult: 1.2 },
+  Mechanical: { label: 'Overclock Link',   desc: '-20% cooldown', cooldownMult: 0.8 },
+  Void:       { label: 'Void Reach',       desc: '+25% range',    rangeMult: 1.25 },
+  Bio:        { label: 'Symbiosis',        desc: 'Heal 1 HP/3s', healInterval: 3 },
+  Arcane:     { label: 'Arcane Flow',      desc: '+1 pierce',     pierceAdd: 1 },
+};
+
+// ── Tradeoff upgrade cards ──
+// Meaningful choices with both upside and downside.
+
+export const TRADEOFF_CARDS = [
+  {
+    id: 'glass_cannon', icon: '🗡', title: 'Glass Cannon',
+    desc: 'All companions +30% damage, −25 max HP',
+    rarity: 'rare',
+    effects: { allDamageMult: 1.3, maxHpAdd: -25 },
+  },
+  {
+    id: 'iron_fortress', icon: '🛡', title: 'Iron Fortress',
+    desc: '+40 max HP, all companions −20% damage',
+    rarity: 'rare',
+    effects: { allDamageMult: 0.8, maxHpAdd: 40 },
+  },
+  {
+    id: 'berserker_fury', icon: '🔥', title: "Berserker's Fury",
+    desc: 'All companions −25% cooldown, take 30% more damage',
+    rarity: 'rare',
+    effects: { allCooldownMult: 0.75, damageTakenMult: 1.3 },
+  },
+  {
+    id: 'precision_focus', icon: '🎯', title: 'Precision Focus',
+    desc: 'All companions +2 pierce, −15% range',
+    rarity: 'rare',
+    effects: { allPierceAdd: 2, allRangeMult: 0.85 },
+  },
+];

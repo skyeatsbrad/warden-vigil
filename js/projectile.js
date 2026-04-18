@@ -121,7 +121,7 @@ export class ProjectileSystem {
     p.homing = false;
     p.split = 0;
     p.explodeRadius = 0;
-    p.slow = 0;
+    p.slow = opts.slow || 0;
     p.lifetime = 2;
     p.age = 0;
     p.chain = bounces;

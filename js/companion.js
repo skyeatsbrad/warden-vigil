@@ -1,6 +1,6 @@
 // ── Companion system ──
 
-import { COMPANION_DEFS, getCompanionStats, MODIFIERS } from './data/companions.js';
+import { COMPANION_DEFS, getCompanionStats, MODIFIERS, EVOLUTIONS } from './data/companions.js';
 import { dist, angle } from './utils.js';
 
 let _nextId = 0;
@@ -16,14 +16,83 @@ export class Companion {
     this.y = owner.y;
     this.orbitAngle = Math.random() * Math.PI * 2;
     this.cooldownTimer = 0;
-    this.modifiers = [];          // array of modifier keys
+    this.modifiers = [];          // array of modifier keys (player-chosen)
+    this.evolution = null;        // 'a' or 'b'
+    this.evolutionDef = null;     // reference to evolution def object
+    this.evolutionGrants = [];    // modifier keys auto-granted by evolution
     this.stats = getCompanionStats(this.def.baseStats, 1);
     this._phase = Math.random() * Math.PI * 2; // visual variety
   }
 
-  levelUp() {
+  /** Active display color (uses evolution color if evolved) */
+  get color() {
+    return this.evolutionDef ? this.evolutionDef.color : this.def.color;
+  }
+
+  /** Check if this companion has a modifier effect (from modifiers OR evolution grants) */
+  hasEffect(key) {
+    return this.modifiers.includes(key) || this.evolutionGrants.includes(key);
+  }
+
+  /** Centralized stat recompute: level → evolution → synergy → tradeoffs */
+  recomputeStats(synergies = {}, tradeoffs = {}) {
+    const base = getCompanionStats(this.def.baseStats, this.level);
+
+    // Evolution multipliers / additions
+    if (this.evolutionDef) {
+      const evo = this.evolutionDef;
+      if (evo.statMult) {
+        for (const [stat, mult] of Object.entries(evo.statMult)) {
+          if (base[stat] !== undefined) {
+            base[stat] = stat === 'damage' ? Math.round(base[stat] * mult) : base[stat] * mult;
+          }
+        }
+      }
+      if (evo.statAdd) {
+        for (const [stat, add] of Object.entries(evo.statAdd)) {
+          if (base[stat] !== undefined) base[stat] += add;
+        }
+      }
+    }
+
+    // Category synergy
+    const syn = synergies[this.def.category];
+    if (syn) {
+      if (syn.damageMult) base.damage = Math.round(base.damage * syn.damageMult);
+      if (syn.cooldownMult) base.cooldown *= syn.cooldownMult;
+      if (syn.rangeMult) base.range = Math.round(base.range * syn.rangeMult);
+      if (syn.pierceAdd) base.pierce += syn.pierceAdd;
+    }
+
+    // Global tradeoffs
+    if (tradeoffs.allDamageMult && tradeoffs.allDamageMult !== 1) {
+      base.damage = Math.round(base.damage * tradeoffs.allDamageMult);
+    }
+    if (tradeoffs.allCooldownMult && tradeoffs.allCooldownMult !== 1) {
+      base.cooldown *= tradeoffs.allCooldownMult;
+    }
+    if (tradeoffs.allRangeMult && tradeoffs.allRangeMult !== 1) {
+      base.range = Math.round(base.range * tradeoffs.allRangeMult);
+    }
+    if (tradeoffs.allPierceAdd) {
+      base.pierce += tradeoffs.allPierceAdd;
+    }
+
+    this.stats = base;
+  }
+
+  levelUp(synergies, tradeoffs) {
     this.level++;
-    this.stats = getCompanionStats(this.def.baseStats, this.level);
+    this.recomputeStats(synergies, tradeoffs);
+  }
+
+  evolve(path, synergies, tradeoffs) {
+    const evo = EVOLUTIONS[this.key]?.[path];
+    if (!evo) return;
+    this.evolution = path;
+    this.evolutionDef = evo;
+    this.evolutionGrants = evo.grants ? [...evo.grants] : [];
+    this.recomputeStats(synergies, tradeoffs);
   }
 
   addModifier(modKey) {
@@ -41,8 +110,8 @@ export class Companion {
         {
           let orbSpd = this.stats.speed || 2;
           let orbDist = orbitDist;
-          if (this.modifiers.includes('orbit_surge')) orbSpd *= 1.5;
-          if (this.modifiers.includes('wider_ring')) orbDist = Math.round(orbDist * 1.4);
+          if (this.hasEffect('orbit_surge')) orbSpd *= 1.5;
+          if (this.hasEffect('wider_ring')) orbDist = Math.round(orbDist * 1.4);
           this.orbitAngle += orbSpd * dt;
           this.x = player.x + Math.cos(this.orbitAngle) * orbDist;
           this.y = player.y + Math.sin(this.orbitAngle) * orbDist;
@@ -121,9 +190,9 @@ export class Companion {
       case 'projectile':
         if (target) {
           const a = angle(this, target);
-          const hasBloom = this.modifiers.includes('split_bloom');
-          const hasDetonate = this.modifiers.includes('detonate');
-          const hasHoming = this.modifiers.includes('homing');
+          const hasBloom = this.hasEffect('split_bloom');
+          const hasDetonate = this.hasEffect('detonate');
+          const hasHoming = this.hasEffect('homing');
           const explR = hasDetonate ? 50 : 0;
 
           if (hasBloom) {
@@ -131,7 +200,7 @@ export class Companion {
               projectileSystem.spawn(
                 this.x, this.y, a + i * 0.25,
                 this.stats.projectileSpeed, this.stats.damage,
-                this.stats.pierce, this.stats.radius, this.def.color,
+                this.stats.pierce, this.stats.radius, this.color,
                 { homing: hasHoming, explodeRadius: explR }
               );
             }
@@ -139,7 +208,7 @@ export class Companion {
             projectileSystem.spawn(
               this.x, this.y, a,
               this.stats.projectileSpeed, this.stats.damage,
-              this.stats.pierce, this.stats.radius, this.def.color,
+              this.stats.pierce, this.stats.radius, this.color,
               { homing: hasHoming, explodeRadius: explR }
             );
           }
@@ -153,8 +222,8 @@ export class Companion {
             if (dist(this, e) < this.stats.range + e.radius) {
               e.hp -= this.stats.damage;
               e.hitFlash = 0.1;
-              particles.emit(e.x, e.y, 4, this.def.color, { speedMax: 80, life: 0.3 });
-              particles.text(e.x, e.y - e.radius, this.stats.damage.toString(), this.def.color);
+              particles.emit(e.x, e.y, 4, this.color, { speedMax: 80, life: 0.3 });
+              particles.text(e.x, e.y - e.radius, this.stats.damage.toString(), this.color);
             }
           }
         }
@@ -162,8 +231,8 @@ export class Companion {
 
       case 'aura':
         {
-          const hasEcho = this.modifiers.includes('pulse_echo');
-          const hasSlowF = this.modifiers.includes('slow_field');
+          const hasEcho = this.hasEffect('pulse_echo');
+          const hasSlowF = this.hasEffect('slow_field');
           const dmg = hasEcho ? this.stats.damage * 2 : this.stats.damage;
           const nearby = grid.query(this.x, this.y, this.stats.range);
           for (const e of nearby) {
@@ -171,11 +240,15 @@ export class Companion {
               e.hp -= dmg;
               e.hitFlash = 0.1;
               if (hasSlowF) e.slowTimer = Math.max(e.slowTimer || 0, 2.0);
-              particles.text(e.x, e.y - e.radius, dmg.toString(), this.def.color, 10);
+              particles.text(e.x, e.y - e.radius, dmg.toString(), this.color, 10);
             }
           }
           this._auraPulseEnd = performance.now() + 500;
-          if (this.modifiers.includes('linger_field')) {
+          // Heal pulse evolution (Sporeloom: Healing Spores)
+          if (this.hasEffect('heal_pulse')) {
+            this.owner.heal(3);
+          }
+          if (this.hasEffect('linger_field')) {
             this.cooldownTimer *= 0.6;
           }
         }
@@ -198,7 +271,7 @@ export class Companion {
               e.hp -= this.stats.damage;
               e.hitFlash = 0.1;
               hits++;
-              particles.text(e.x, e.y - e.radius, this.stats.damage.toString(), this.def.color, 10);
+              particles.text(e.x, e.y - e.radius, this.stats.damage.toString(), this.color, 10);
             }
           }
           this._beamTarget = { x: this.x + Math.cos(a) * beamLen, y: this.y + Math.sin(a) * beamLen };
@@ -213,16 +286,17 @@ export class Companion {
 
       case 'chain':
         if (target) {
-          const hasArc = this.modifiers.includes('chain_arc');
-          const hasOverload = this.modifiers.includes('overload');
-          const hasMark = this.modifiers.includes('static_mark');
+          const hasArc = this.hasEffect('chain_arc');
+          const hasOverload = this.hasEffect('overload');
+          const hasMark = this.hasEffect('static_mark');
+          const hasAutoSlow = this.hasEffect('auto_slow');
           const chainPierce = this.stats.pierce + (hasArc ? 3 : 0);
           const chainDmg = hasOverload ? Math.round(this.stats.damage * 1.3) : this.stats.damage;
           projectileSystem.spawnChain(
             this.x, this.y, target,
             this.stats.projectileSpeed, chainDmg,
-            chainPierce, this.stats.radius, this.def.color, enemies,
-            { mark: hasMark, overload: hasOverload }
+            chainPierce, this.stats.radius, this.color, enemies,
+            { mark: hasMark, overload: hasOverload, slow: hasAutoSlow ? 1.5 : 0 }
           );
         }
         break;
@@ -244,12 +318,16 @@ export class Companion {
     const sx = camera.screenX(this.x);
     const sy = camera.screenY(this.y);
 
+    // Use evolution visuals if evolved
+    const icon = this.evolutionDef ? this.evolutionDef.icon : this.def.icon;
+    const color = this.color;
+
     // Aura pulse effect
     if (this._auraPulseEnd && performance.now() < this._auraPulseEnd) {
       const remaining = (this._auraPulseEnd - performance.now()) / 500;
       ctx.beginPath();
       ctx.arc(sx, sy, this.stats.range * (1 - remaining * 0.3), 0, Math.PI * 2);
-      ctx.strokeStyle = this.def.color + Math.floor(remaining * 80).toString(16).padStart(2, '0');
+      ctx.strokeStyle = color + Math.floor(remaining * 80).toString(16).padStart(2, '0');
       ctx.lineWidth = 2;
       ctx.stroke();
     }
@@ -257,8 +335,8 @@ export class Companion {
     // Body glow
     ctx.beginPath();
     ctx.arc(sx, sy, this.stats.radius + 2, 0, Math.PI * 2);
-    ctx.fillStyle = this.def.color;
-    ctx.shadowColor = this.def.color;
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
     ctx.shadowBlur = 10;
     ctx.globalAlpha = 0.4;
     ctx.fill();
@@ -268,7 +346,7 @@ export class Companion {
     // Body
     ctx.beginPath();
     ctx.arc(sx, sy, this.stats.radius, 0, Math.PI * 2);
-    ctx.fillStyle = this.def.color;
+    ctx.fillStyle = color;
     ctx.fill();
 
     // Icon
@@ -276,7 +354,7 @@ export class Companion {
     ctx.font = `${this.stats.radius}px monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(this.def.icon, sx, sy + 1);
+    ctx.fillText(icon, sx, sy + 1);
 
     // Level badge
     if (this.level > 1) {
@@ -294,9 +372,9 @@ export class Companion {
       ctx.beginPath();
       ctx.moveTo(bsx, bsy);
       ctx.lineTo(bex, bey);
-      ctx.strokeStyle = this.def.color;
+      ctx.strokeStyle = color;
       ctx.lineWidth = 3;
-      ctx.shadowColor = this.def.color;
+      ctx.shadowColor = color;
       ctx.shadowBlur = 8;
       ctx.stroke();
       ctx.shadowBlur = 0;
@@ -308,8 +386,8 @@ export class Companion {
 export function processOrbitDamage(companions, enemies, particles, dt, grid) {
   for (const c of companions) {
     if (c.def.attack !== 'orbit') continue;
-    const hasBurn = c.modifiers.includes('contact_burn');
-    const hasSurge = c.modifiers.includes('orbit_surge');
+    const hasBurn = c.hasEffect('contact_burn');
+    const hasSurge = c.hasEffect('orbit_surge');
     const tickRate = hasBurn ? 0.15 : 0.3;
     const dmgMult = hasSurge ? 1.2 : 1;
     const timerId = '_oht_' + c.id;
@@ -324,7 +402,7 @@ export function processOrbitDamage(companions, enemies, particles, dt, grid) {
           e.hp -= dmg;
           e.hitFlash = 0.08;
           e[timerId] = tickRate;
-          particles.text(e.x, e.y - e.radius, dmg.toString(), c.def.color, 10);
+          particles.text(e.x, e.y - e.radius, dmg.toString(), c.color, 10);
         }
       }
     }

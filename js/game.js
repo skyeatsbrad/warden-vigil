@@ -11,7 +11,7 @@ import { UI } from './ui.js';
 import { Progression } from './progression.js';
 import { processCollisions, handleProjectileHit } from './collision.js';
 import { SpatialGrid } from './spatial-grid.js';
-import { COMPANION_DEFS } from './data/companions.js';
+import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, EVOLUTIONS, getEvolveLevel } from './data/companions.js';
 import { formatTime, dist, weightedPick } from './utils.js';
 
 export class Game {
@@ -41,6 +41,17 @@ export class Game {
     this.pendingUpgrades = 0;
     this.overclockTimer = 0;
     this._overclockOriginals = [];
+
+    // Build-defining systems
+    this.synergies = {};         // active category synergies
+    this.tradeoffs = {           // accumulated tradeoff effects
+      allDamageMult: 1,
+      allCooldownMult: 1,
+      allRangeMult: 1,
+      allPierceAdd: 0,
+    };
+    this._pendingEvolution = null;
+    this._bioHealTimer = 0;
 
     // Frame pressure tracking for adaptive quality
     this._smoothedDt = 0.016;
@@ -131,8 +142,11 @@ export class Game {
     this.pendingUpgrades = 0;
     this.overclockTimer = 0;
     this._overclockOriginals = [];
-
-    // Reset camera to player start
+    this.synergies = {};
+    this.tradeoffs = { allDamageMult: 1, allCooldownMult: 1, allRangeMult: 1, allPierceAdd: 0 };
+    this._pendingEvolution = null;
+    this._bioHealTimer = 0;
+    this.ui._pickedTradeoffs = new Set();
     this.camera.reset(0, 0);
 
     // Spawn starting companion
@@ -228,6 +242,15 @@ export class Game {
     // Ultimate cooldown
     if (this.ultimateCooldown > 0) this.ultimateCooldown -= dt;
 
+    // Bio synergy heal
+    if (this.synergies.Bio) {
+      this._bioHealTimer -= dt;
+      if (this._bioHealTimer <= 0) {
+        this.player.heal(1);
+        this._bioHealTimer = SYNERGY_DEFS.Bio.healInterval;
+      }
+    }
+
     // Particles
     this.particles.update(dt);
 
@@ -241,6 +264,20 @@ export class Game {
   }
 
   _showNextUpgrade() {
+    // Handle pending evolution first (guaranteed 2-card event)
+    if (this._pendingEvolution) {
+      const c = this._pendingEvolution;
+      this._pendingEvolution = null;
+      this.state = 'upgrading';
+      this.ui.showEvolutionChoice(c, path => {
+        c.evolve(path, this.synergies, this.tradeoffs);
+        this.particles.emit(c.x, c.y, 20, c.evolutionDef.color, { speedMax: 150, life: 0.6 });
+        this.particles.text(c.x, c.y - 20, `${c.evolutionDef.name}!`, c.evolutionDef.color);
+        this._showNextUpgrade();
+      });
+      return;
+    }
+
     if (this.pendingUpgrades <= 0) {
       this.state = 'playing';
       return;
@@ -438,13 +475,25 @@ export class Game {
   _applyUpgrade(choice) {
     switch (choice.type) {
       case 'new_companion':
-        this.companions.push(new Companion(choice.key, this.player));
+        {
+          const c = new Companion(choice.key, this.player);
+          this.companions.push(c);
+          this._computeSynergies();
+          c.recomputeStats(this.synergies, this.tradeoffs);
+        }
         break;
 
       case 'level_up':
         {
           const c = this.companions.find(c => c.id === choice.companionId);
-          if (c) c.levelUp();
+          if (c) {
+            c.levelUp(this.synergies, this.tradeoffs);
+            // Check for evolution trigger
+            const evoLevel = getEvolveLevel(c.key);
+            if (c.level === evoLevel && EVOLUTIONS[c.key] && !c.evolution) {
+              this._pendingEvolution = c;
+            }
+          }
         }
         break;
 
@@ -452,6 +501,30 @@ export class Game {
         {
           const c = this.companions.find(c => c.id === choice.companionId);
           if (c) c.addModifier(choice.modKey);
+        }
+        break;
+
+      case 'tradeoff':
+        {
+          const tc = TRADEOFF_CARDS.find(t => t.id === choice.tradeoffId);
+          if (tc) {
+            const eff = tc.effects;
+            if (eff.allDamageMult) this.tradeoffs.allDamageMult *= eff.allDamageMult;
+            if (eff.allCooldownMult) this.tradeoffs.allCooldownMult *= eff.allCooldownMult;
+            if (eff.allRangeMult) this.tradeoffs.allRangeMult *= eff.allRangeMult;
+            if (eff.allPierceAdd) this.tradeoffs.allPierceAdd += eff.allPierceAdd;
+            if (eff.maxHpAdd) {
+              this.player.maxHp += eff.maxHpAdd;
+              if (eff.maxHpAdd > 0) this.player.heal(eff.maxHpAdd);
+              if (this.player.hp > this.player.maxHp) this.player.hp = this.player.maxHp;
+              if (this.player.maxHp < 1) this.player.maxHp = 1;
+            }
+            if (eff.damageTakenMult) {
+              this.player.damageTakenMult = (this.player.damageTakenMult || 1) * eff.damageTakenMult;
+            }
+            this.ui._pickedTradeoffs.add(tc.id);
+            this._recomputeAllStats();
+          }
         }
         break;
 
@@ -467,6 +540,26 @@ export class Game {
       case 'heal':
         this.player.heal(choice.value);
         break;
+    }
+  }
+
+  _computeSynergies() {
+    const counts = {};
+    for (const c of this.companions) {
+      const cat = c.def.category;
+      counts[cat] = (counts[cat] || 0) + 1;
+    }
+    this.synergies = {};
+    for (const [cat, def] of Object.entries(SYNERGY_DEFS)) {
+      if ((counts[cat] || 0) >= 2) {
+        this.synergies[cat] = def;
+      }
+    }
+  }
+
+  _recomputeAllStats() {
+    for (const c of this.companions) {
+      c.recomputeStats(this.synergies, this.tradeoffs);
     }
   }
 

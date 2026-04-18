@@ -19,10 +19,10 @@ export function processCollisions(player, enemies, particles, camera, grid) {
       e.x += (dx / len) * overlap * 0.65;
       e.y += (dy / len) * overlap * 0.65;
 
-      const hit = player.takeDamage(e.damage);
-      if (hit) {
+      const dmg = player.takeDamage(e.damage);
+      if (dmg > 0) {
         particles.emit(player.x, player.y, 6, '#e74c3c', { speedMax: 100, life: 0.3 });
-        particles.text(player.x, player.y - player.radius - 10, e.damage.toString(), '#e74c3c');
+        particles.text(player.x, player.y - player.radius - 10, dmg.toString(), '#e74c3c');
         camera.applyShake();
       }
     }

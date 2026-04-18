@@ -42,11 +42,12 @@ export class Player {
   }
 
   takeDamage(amount) {
-    if (this.invulnTime > 0) return false;
-    this.hp -= amount;
+    if (this.invulnTime > 0) return 0;
+    const dmg = Math.round(amount * (this.damageTakenMult || 1));
+    this.hp -= dmg;
     this.invulnTime = this.invulnDuration;
     if (this.hp < 0) this.hp = 0;
-    return true;
+    return dmg;
   }
 
   heal(amount) {

@@ -1,6 +1,6 @@
 // ── UI: HUD + Upgrade selection ──
 
-import { COMPANION_DEFS, DROPPABLE_COMPANIONS, MODIFIERS, getModifiersForType } from './data/companions.js';
+import { COMPANION_DEFS, DROPPABLE_COMPANIONS, MODIFIERS, getModifiersForType, EVOLUTIONS, getEvolveLevel, TRADEOFF_CARDS } from './data/companions.js';
 import { pick, weightedPick } from './utils.js';
 
 // Rarity weight multipliers — lower = rarer
@@ -84,6 +84,54 @@ export class UI {
     this.rerollBtn.classList.add('hidden');
   }
 
+  /** Show a guaranteed 2-card evolution choice for a companion */
+  showEvolutionChoice(companion, onSelect) {
+    this.upgradeModal.classList.remove('hidden');
+    this.rerollBtn.classList.add('hidden');
+    this.upgradeChoices.innerHTML = '';
+
+    const evo = EVOLUTIONS[companion.key];
+    if (!evo) return;
+
+    const baseName = companion.evolutionDef ? companion.evolutionDef.name : companion.def.name;
+
+    for (const path of ['a', 'b']) {
+      const e = evo[path];
+      const card = document.createElement('div');
+      card.className = 'upgrade-card rarity-border-legendary';
+      // Build a summary of stat changes
+      let statLine = '';
+      if (e.statMult) {
+        const parts = [];
+        for (const [s, m] of Object.entries(e.statMult)) {
+          if (m > 1) parts.push(`+${Math.round((m - 1) * 100)}% ${s}`);
+          else parts.push(`−${Math.round((1 - m) * 100)}% ${s}`);
+        }
+        statLine = parts.join(', ');
+      }
+      if (e.grants && e.grants.length) {
+        const modNames = e.grants.map(g => {
+          const mod = MODIFIERS[g];
+          return mod ? mod.name : g;
+        }).join(', ');
+        if (statLine) statLine += '<br>';
+        statLine += `Grants: ${modNames}`;
+      }
+      card.innerHTML = `
+        <div class="card-icon" style="font-size:42px">${e.icon}</div>
+        <div class="card-title" style="color:${e.color}">${e.name}</div>
+        <div class="card-desc">${e.desc}</div>
+        <div class="card-desc" style="margin-top:6px;color:#ddd;font-size:11px">${statLine}</div>
+        <div class="card-rarity rarity-legendary">EVOLUTION</div>
+      `;
+      card.addEventListener('click', () => {
+        this.upgradeModal.classList.add('hidden');
+        onSelect(path);
+      });
+      this.upgradeChoices.appendChild(card);
+    }
+  }
+
   _generateChoices(player, companions, guaranteedRare) {
     const choices = [];
     const pool = [];
@@ -106,16 +154,19 @@ export class UI {
       }
     }
 
-    // ── Companion level-ups (common) ──
+    // ── Companion level-ups ──
     for (const c of companions) {
       if (c.level < 8) {
+        const evoLevel = getEvolveLevel(c.key);
+        const isEvoLevel = c.level + 1 === evoLevel && EVOLUTIONS[c.key] && !c.evolution;
+        const name = c.evolutionDef ? c.evolutionDef.name : c.def.name;
         pool.push({
           type: 'level_up', companionId: c.id,
-          icon: c.def.icon,
-          title: `${c.def.name} → Lv${c.level + 1}`,
-          desc: '+20% damage, +10 range, faster attacks',
-          rarity: 'common',
-          weight: 6 * RARITY_WEIGHTS.common,
+          icon: c.evolutionDef ? c.evolutionDef.icon : c.def.icon,
+          title: `${name} → Lv${c.level + 1}`,
+          desc: isEvoLevel ? '⚡ EVOLUTION! Choose a new form!' : '+20% damage, +10 range, faster attacks',
+          rarity: isEvoLevel ? 'epic' : 'common',
+          weight: isEvoLevel ? 10 : 6 * RARITY_WEIGHTS.common,
         });
       }
     }
@@ -124,19 +175,35 @@ export class UI {
     for (const c of companions) {
       if (c.modifiers.length >= 2) continue;
       const compatibleKeys = getModifiersForType(c.def.attack);
-      const availMods = compatibleKeys.filter(m => !c.modifiers.includes(m));
+      // Filter out modifiers already owned or auto-granted by evolution
+      const availMods = compatibleKeys.filter(m => !c.modifiers.includes(m) && !c.evolutionGrants.includes(m));
       for (const modKey of availMods) {
         const mod = MODIFIERS[modKey];
         const rarity = mod.rarity || 'rare';
+        const name = c.evolutionDef ? c.evolutionDef.name : c.def.name;
         pool.push({
           type: 'modifier', companionId: c.id, modKey,
           icon: mod.icon,
-          title: `${c.def.name}: ${mod.name}`,
+          title: `${name}: ${mod.name}`,
           desc: mod.desc,
           rarity,
           weight: 2 * RARITY_WEIGHTS[rarity],
         });
       }
+    }
+
+    // ── Tradeoff cards ──
+    for (const tc of TRADEOFF_CARDS) {
+      if (!this._pickedTradeoffs) this._pickedTradeoffs = new Set();
+      if (this._pickedTradeoffs.has(tc.id)) continue;
+      pool.push({
+        type: 'tradeoff', tradeoffId: tc.id,
+        icon: tc.icon,
+        title: tc.title,
+        desc: tc.desc,
+        rarity: tc.rarity,
+        weight: 2 * RARITY_WEIGHTS[tc.rarity],
+      });
     }
 
     // ── Common stat boosts ──
