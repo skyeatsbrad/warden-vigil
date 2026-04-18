@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Warden's Vigil</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- HUD Overlay -->
+  <div id="hud">
+    <div id="hud-top">
+      <div id="xp-bar-container">
+        <div id="xp-bar"></div>
+        <span id="xp-text">Lv 1</span>
+      </div>
+      <div id="hud-stats">
+        <span id="timer">0:00</span>
+        <span id="kill-count">Kills: 0</span>
+      </div>
+    </div>
+    <div id="hp-bar-container">
+      <div id="hp-bar"></div>
+      <span id="hp-text">100/100</span>
+    </div>
+  </div>
+
+  <!-- Touch Controls -->
+  <div id="touch-controls">
+    <canvas id="joystick" width="160" height="160"></canvas>
+  </div>
+  <button id="panic-btn">PANIC</button>
+  <button id="ult-btn">ULT</button>
+
+  <!-- Upgrade Selection Modal -->
+  <div id="upgrade-modal" class="hidden">
+    <h2>Choose an Upgrade</h2>
+    <div id="upgrade-choices"></div>
+    <button id="reroll-btn" class="hidden">Reroll (1)</button>
+  </div>
+
+  <!-- Title Screen -->
+  <div id="title-screen">
+    <h1>Warden's Vigil</h1>
+    <p class="subtitle">Summon. Survive. Endure.</p>
+    <div id="companion-select">
+      <h3>Choose Starting Companion</h3>
+      <div id="companion-options"></div>
+    </div>
+    <button id="start-btn">Begin Vigil</button>
+    <div id="unlock-info"></div>
+  </div>
+
+  <!-- Game Over Screen -->
+  <div id="gameover-screen" class="hidden">
+    <h1>Vigil Ended</h1>
+    <div id="run-stats"></div>
+    <button id="restart-btn">Try Again</button>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
