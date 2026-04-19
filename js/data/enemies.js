@@ -214,13 +214,19 @@ export const REALM_DEFS = [
   },
 ];
 
-// Spawn weights by realm-local time (seconds)
+// Spawn weights by realm-local time (seconds) — frozen shared tables
+const _SW_1 = Object.freeze({ crawler: 7, drifter: 2 });
+const _SW_2 = Object.freeze({ crawler: 5, drifter: 3 });
+const _SW_3 = Object.freeze({ crawler: 4, drifter: 3, shambler: 1 });
+const _SW_4 = Object.freeze({ crawler: 3, drifter: 3, shambler: 2, ravager: 1 });
+const _SW_5 = Object.freeze({ crawler: 2, drifter: 2, shambler: 3, ravager: 2, phaseghoul: 1 });
+
 export function getSpawnWeights(elapsed) {
-  if (elapsed < 45)  return { crawler: 7, drifter: 2 };
-  if (elapsed < 90)  return { crawler: 5, drifter: 3 };
-  if (elapsed < 150) return { crawler: 4, drifter: 3, shambler: 1 };
-  if (elapsed < 240) return { crawler: 3, drifter: 3, shambler: 2, ravager: 1 };
-  return { crawler: 2, drifter: 2, shambler: 3, ravager: 2, phaseghoul: 1 };
+  if (elapsed < 45)  return _SW_1;
+  if (elapsed < 90)  return _SW_2;
+  if (elapsed < 150) return _SW_3;
+  if (elapsed < 240) return _SW_4;
+  return _SW_5;
 }
 
 // Scale enemy stats using effective elapsed minutes (includes realm offset)

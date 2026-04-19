@@ -1,7 +1,7 @@
 // ── Collision & damage ──
 
-import { dist } from './utils.js?v=9';
-import { COLORS } from './data/colors.js?v=9';
+import { dist } from './utils.js?v=10';
+import { COLORS } from './data/colors.js?v=10';
 
 export function processCollisions(player, enemies, particles, camera, grid, enemySystem) {
   // Use grid to check only nearby enemies instead of scanning all
@@ -29,7 +29,7 @@ export function processCollisions(player, enemies, particles, camera, grid, enem
     }
 
     // ── Boss slam AOE check ──
-    if (e._slamHit && e._moveMode === 'slam') {
+    if (e.tier === 'boss' && e._slamHit && e._moveMode === 'slam') {
       const slamD = Math.hypot(player.x - e.x, player.y - e.y);
       if (slamD < 80) { // BOSS_TUNING.slamRadius
         const dmg = player.takeDamage(e.damage);
@@ -43,7 +43,7 @@ export function processCollisions(player, enemies, particles, camera, grid, enem
     }
 
     // ── Boss dash contact check ──
-    if (e._moveMode === 'dash' && !e._dashHitPlayer) {
+    if (e.tier === 'boss' && e._moveMode === 'dash' && !e._dashHitPlayer) {
       const dashD = Math.hypot(player.x - e.x, player.y - e.y);
       if (dashD < 40 + player.radius) { // BOSS_TUNING.dashHitRadius + player
         const dmg = player.takeDamage(e.damage);
@@ -55,7 +55,7 @@ export function processCollisions(player, enemies, particles, camera, grid, enem
         e._dashHitPlayer = true; // only hit once per dash
       }
     }
-    if (e._moveMode !== 'dash') e._dashHitPlayer = false;
+    if (e.tier === 'boss' && e._moveMode !== 'dash') e._dashHitPlayer = false;
   }
 
   // ── Hazard zone tick damage ──

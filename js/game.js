@@ -1,20 +1,20 @@
 // ── Game state manager ──
 
-import { Player } from './player.js?v=9';
-import { Companion, processOrbitDamage } from './companion.js?v=9';
-import { EnemySystem } from './enemy.js?v=9';
-import { ProjectileSystem } from './projectile.js?v=9';
-import { XPSystem } from './xp.js?v=9';
-import { Particles } from './particles.js?v=9';
-import { Camera } from './camera.js?v=9';
-import { UI } from './ui.js?v=9';
-import { Progression } from './progression.js?v=9';
-import { processCollisions, handleProjectileHit } from './collision.js?v=9';
-import { SpatialGrid } from './spatial-grid.js?v=9';
-import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue } from './data/companions.js?v=9';
-import { COLORS } from './data/colors.js?v=9';
-import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=9';
-import { formatTime, dist, weightedPick } from './utils.js?v=9';
+import { Player } from './player.js?v=10';
+import { Companion, processOrbitDamage } from './companion.js?v=10';
+import { EnemySystem } from './enemy.js?v=10';
+import { ProjectileSystem } from './projectile.js?v=10';
+import { XPSystem } from './xp.js?v=10';
+import { Particles } from './particles.js?v=10';
+import { Camera } from './camera.js?v=10';
+import { UI } from './ui.js?v=10';
+import { Progression } from './progression.js?v=10';
+import { processCollisions, handleProjectileHit } from './collision.js?v=10';
+import { SpatialGrid } from './spatial-grid.js?v=10';
+import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue } from './data/companions.js?v=10';
+import { COLORS } from './data/colors.js?v=10';
+import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=10';
+import { formatTime, dist, weightedPick } from './utils.js?v=10';
 
 export class Game {
   constructor(canvas, input) {
@@ -224,12 +224,25 @@ export class Game {
     this._realmElapsed = 0;
     this._realmState = 'active'; // active | boss | portal
     this._realmBossId = -1;
+    this._realmBossRef = null;
+    this._currentRealmDef = REALM_DEFS[0];
+    this._currentRi = 0;
     this._portalTimer = 0;
     this._portalRingT = 0;
 
     // Spawn starting companion
     const starter = new Companion(this.selectedStarter, this.player);
     this.companions.push(starter);
+
+    // Bind projectile hit callback once (avoids per-frame closure allocation)
+    this._onProjectileHit = (enemy, proj) => {
+      const actualDmg = handleProjectileHit(enemy, proj, this.particles);
+      this._totalDamageDealt += actualDmg;
+      if (proj.sourceId >= 0) {
+        const c = this.companions.find(c => c.id === proj.sourceId);
+        if (c) c._totalDamage += actualDmg;
+      }
+    };
   }
 
   update(dt) {
@@ -244,9 +257,9 @@ export class Game {
     this._realmElapsed += dt;
     this.input.update();
 
-    // Compute realm-aware scaling
-    const realmDef = REALM_DEFS[Math.min(this._realmIndex, REALM_DEFS.length - 1)];
-    const ri = Math.min(this._realmIndex, REALM_DEFS.length - 1);
+    // Compute realm-aware scaling (cached per realm transition)
+    const realmDef = this._currentRealmDef;
+    const ri = this._currentRi;
     const effectiveMinutes = this._realmElapsed / 60 + ri * REALM_CONFIG.scalingOffset;
 
     // Player
@@ -298,12 +311,12 @@ export class Game {
         this._realmBossId = this.enemySystem.forceSpawnBoss(
           bossType, this.player, this.camera, effectiveMinutes, this._realmIndex
         );
+        this._realmBossRef = this.enemySystem.enemies.find(e => e.id === this._realmBossId) || null;
         this._realmState = 'boss';
         this.enemySystem.bossAlive = true;
         this.enemySystem.spawnRateMult = REALM_CONFIG.bossSpawnMult;
         // Announce with boss name
-        const bossEnemy = this.enemySystem.enemies.find(e => e.id === this._realmBossId);
-        const bossName = bossEnemy ? bossEnemy.name : bossType;
+        const bossName = this._realmBossRef ? this._realmBossRef.name : bossType;
         this.particles.text(this.player.x, this.player.y - 50,
           `⚠ ${bossName}!`, '#ff2222', 22);
         this.camera.applyShake();
@@ -374,14 +387,7 @@ export class Game {
     this.enemySystem.update(dt, this._realmElapsed, effectiveMinutes, this.player, this.camera, grid);
 
     // Projectiles — track damage for source companions
-    this.projectiles.update(dt, this.enemySystem.enemies, this.particles, (enemy, proj) => {
-      const actualDmg = handleProjectileHit(enemy, proj, this.particles);
-      this._totalDamageDealt += actualDmg;
-      if (proj.sourceId >= 0) {
-        const c = this.companions.find(c => c.id === proj.sourceId);
-        if (c) c._totalDamage += actualDmg;
-      }
-    }, grid);
+    this.projectiles.update(dt, this.enemySystem.enemies, this.particles, this._onProjectileHit, grid);
 
     // Collisions (player vs nearby enemies via grid)
     processCollisions(this.player, this.enemySystem.enemies, this.particles, this.camera, grid, this.enemySystem);
@@ -466,6 +472,7 @@ export class Game {
           this._realmState = 'portal';
           this._portalTimer = REALM_CONFIG.portalDuration;
           this._portalRingT = 0;
+          this._realmBossRef = null;
           this.enemySystem.bossAlive = false;
           this.enemySystem.spawnRateMult = 0;
           // Victory feedback
@@ -1130,7 +1137,7 @@ export class Game {
     // Realm label
     ctx.save();
     const nextDef = REALM_DEFS[Math.min(this._realmIndex + 1, REALM_DEFS.length - 1)];
-    ctx.fillStyle = `rgba(255,255,255,${0.6 + 0.3 * pulse})`;
+    ctx.fillStyle = `rgba(255,255,255,${(0.6 + 0.3 * pulse).toFixed(2)})`;
     ctx.font = 'bold 16px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(nextDef.name, sx, sy - radius - 10);
@@ -1138,8 +1145,8 @@ export class Game {
   }
 
   _drawBossHPBar(ctx) {
-    const boss = this.enemySystem.enemies.find(e => e.id === this._realmBossId);
-    if (!boss) return;
+    const boss = this._realmBossRef;
+    if (!boss || boss.hp <= 0) return;
 
     const barW = 300, barH = 16;
     const x = (ctx.canvas.width - barW) / 2;
@@ -1418,6 +1425,11 @@ export class Game {
     this._realmElapsed = 0;
     this._realmState = 'active';
     this._realmBossId = -1;
+    this._realmBossRef = null;
+
+    // Cache realm def for this realm
+    this._currentRi = Math.min(this._realmIndex, REALM_DEFS.length - 1);
+    this._currentRealmDef = REALM_DEFS[this._currentRi];
 
     // Reset surge for new realm
     this._surgeTimer = 0;
@@ -1430,12 +1442,10 @@ export class Game {
     this.enemySystem.realmIndex = this._realmIndex;
 
     // Apply realm-based spawn interval compression
-    const ri = Math.min(this._realmIndex, REALM_DEFS.length - 1);
-    this.enemySystem.spawnInterval *= Math.pow(REALM_CONFIG.intervalPerRealm, ri);
+    this.enemySystem.spawnInterval *= Math.pow(REALM_CONFIG.intervalPerRealm, this._currentRi);
 
-    const nextDef = REALM_DEFS[Math.min(this._realmIndex, REALM_DEFS.length - 1)];
     this.particles.text(this.player.x, this.player.y - 50,
-      nextDef.name, '#00ffcc', 24);
+      this._currentRealmDef.name, '#00ffcc', 24);
     this.camera.applyShake();
   }
 

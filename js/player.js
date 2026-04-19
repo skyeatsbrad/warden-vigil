@@ -1,6 +1,6 @@
 // ── Player (Warden) ──
 
-import { COLORS, GLOW } from './data/colors.js?v=9';
+import { COLORS, GLOW } from './data/colors.js?v=10';
 
 export class Player {
   constructor(x, y) {

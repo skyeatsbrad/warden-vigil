@@ -1,8 +1,8 @@
 // ── Enemy spawning + AI ──
 
-import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy, scaleRealmBoss, REALM_CONFIG, REALM_DEFS, BOSS_TUNING } from './data/enemies.js?v=9';
-import { weightedPick } from './utils.js?v=9';
-import { GLOW } from './data/colors.js?v=9';
+import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy, scaleRealmBoss, REALM_CONFIG, REALM_DEFS, BOSS_TUNING } from './data/enemies.js?v=10';
+import { weightedPick } from './utils.js?v=10';
+import { GLOW } from './data/colors.js?v=10';
 
 let _nextEnemyId = 0;
 
@@ -143,8 +143,15 @@ export class EnemySystem {
 
   _spawnWave(player, camera, realmElapsed, effectiveMinutes) {
     const weights = getSpawnWeights(realmElapsed);
-    const keys = Object.keys(weights);
-    const vals = keys.map(k => weights[k]);
+
+    // Cache keys/vals per weight table to avoid per-wave allocation
+    if (weights !== this._lastWeights) {
+      this._lastWeights = weights;
+      this._weightKeys = Object.keys(weights);
+      this._weightVals = this._weightKeys.map(k => weights[k]);
+    }
+    const keys = this._weightKeys;
+    const vals = this._weightVals;
 
     const ri = Math.min(this.realmIndex, REALM_DEFS.length - 1);
     let count = 2 + Math.floor(realmElapsed / 35) + Math.floor(ri * REALM_CONFIG.waveSizePerRealm);
@@ -448,7 +455,7 @@ export class EnemySystem {
         // Outer shell
         ctx.beginPath();
         ctx.arc(sx, sy, e.radius + 8, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(56,0,107,${bossPhase})`;
+        ctx.fillStyle = `rgba(56,0,107,${bossPhase.toFixed(2)})`;
         ctx.shadowColor = e.color;
         ctx.shadowBlur = GLOW.enemyBoss;
         ctx.fill();
@@ -456,19 +463,23 @@ export class EnemySystem {
         // Middle ring
         ctx.beginPath();
         ctx.arc(sx, sy, e.radius + 4, 0, Math.PI * 2);
-        ctx.strokeStyle = e.color + '60';
+        ctx.strokeStyle = e._color60 || (e._color60 = e.color + '60');
         ctx.lineWidth = 2;
         ctx.stroke();
       }
 
       // Elite / miniboss: pulsing glow
       if (e.glow) {
-        const pulse = e.tier === 'boss' ? 1 :
-          (Math.sin(now * 0.004 + (e.id || 0)) * 0.3 + 0.7);
         const glowR = e.radius + (e.tier === 'boss' ? 3 : 5);
         ctx.beginPath();
         ctx.arc(sx, sy, glowR, 0, Math.PI * 2);
-        ctx.fillStyle = e.color + Math.floor(pulse * 48).toString(16).padStart(2, '0');
+        if (e.tier === 'boss') {
+          // Boss: static full alpha (no hex churn)
+          ctx.fillStyle = e._color30 || (e._color30 = e.color + '30');
+        } else {
+          const pulse = Math.sin(now * 0.004 + (e.id || 0)) * 0.3 + 0.7;
+          ctx.fillStyle = e.color + Math.floor(pulse * 48).toString(16).padStart(2, '0');
+        }
         ctx.shadowColor = e.color;
         ctx.shadowBlur = e.tier === 'boss' ? GLOW.enemyBoss : GLOW.enemyElite;
         ctx.fill();
@@ -644,6 +655,7 @@ export class EnemySystem {
     this.spawnRateMult = 1;
     this.bossAlive = false;
     this.hazardZones.length = 0;
+    this._lastWeights = null;
   }
 
   // Force-spawn a realm boss, evicting far trash if at cap
