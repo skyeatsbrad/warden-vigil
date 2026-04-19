@@ -97,19 +97,56 @@ export const WAVE_CONFIG = {
   eliteStartTime: 100,     // seconds
 };
 
-// Realm loop configuration
+// Realm loop configuration — shared defaults
 export const REALM_CONFIG = {
-  realmDuration: 120,         // seconds per realm before boss spawns
-  spawnPauseDuringBoss: 0.3,  // spawn rate multiplier while realm boss alive
   portalDuration: 4,          // seconds portal lingers before auto-advancing
   scalingOffset: 1.5,         // "virtual minutes" added per realm for stat scaling
-  maxRealms: 5,               // scaling caps here, loop continues
   bossHpPerRealm: 1.4,        // boss HP multiplier per realm (compound)
   bossDmgPerRealm: 1.2,       // boss damage multiplier per realm
   waveSizePerRealm: 1,        // extra enemies per wave per realm
   intervalPerRealm: 0.92,     // spawn interval multiplier per realm (compounds)
-  bossTypes: ['ironhusk', 'voidlord', 'voidlord', 'voidlord', 'voidlord'],
+  bossSpawnMult: 0.65,        // spawn rate multiplier while realm boss alive (~35% reduction)
+  bossEnemyCap: 150,          // reduced enemy cap during boss fight
 };
+
+// Per-realm definitions — config-driven, not hardcoded if/else
+export const REALM_DEFS = [
+  {
+    name: 'The Outskirts',
+    duration: 120,
+    bossType: 'ironhusk',
+    tint: '#1a1a2e',       // subtle background tint (unused for now, placeholder)
+    eliteStartTime: 100,   // seconds into realm before elites can spawn
+  },
+  {
+    name: 'The Hollows',
+    duration: 110,
+    bossType: 'voidlord',
+    tint: '#1e0a2e',
+    eliteStartTime: 70,
+  },
+  {
+    name: 'The Abyss',
+    duration: 100,
+    bossType: 'voidlord',
+    tint: '#2e0a0a',
+    eliteStartTime: 45,
+  },
+  {
+    name: 'The Crucible',
+    duration: 90,
+    bossType: 'voidlord',
+    tint: '#2e1a00',
+    eliteStartTime: 30,
+  },
+  {
+    name: 'The Endless',
+    duration: 90,
+    bossType: 'voidlord',
+    tint: '#0a0a0a',
+    eliteStartTime: 20,
+  },
+];
 
 // Spawn weights by realm-local time (seconds)
 export function getSpawnWeights(elapsed) {
@@ -132,7 +169,7 @@ export function scaleEnemy(base, effectiveMinutes) {
 // Scale a realm boss with compound realm multipliers
 export function scaleRealmBoss(base, effectiveMinutes, realmIndex) {
   const scaled = scaleEnemy(base, effectiveMinutes);
-  const ri = Math.min(realmIndex, REALM_CONFIG.maxRealms - 1);
+  const ri = Math.min(realmIndex, REALM_DEFS.length - 1);
   scaled.hp = Math.round(scaled.hp * Math.pow(REALM_CONFIG.bossHpPerRealm, ri));
   scaled.damage = Math.round(scaled.damage * Math.pow(REALM_CONFIG.bossDmgPerRealm, ri));
   return scaled;

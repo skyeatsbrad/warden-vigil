@@ -1,8 +1,8 @@
 // ── Enemy spawning + AI ──
 
-import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy, scaleRealmBoss, REALM_CONFIG } from './data/enemies.js?v=5';
-import { weightedPick } from './utils.js?v=5';
-import { GLOW } from './data/colors.js?v=5';
+import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy, scaleRealmBoss, REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=6';
+import { weightedPick } from './utils.js?v=6';
+import { GLOW } from './data/colors.js?v=6';
 
 let _nextEnemyId = 0;
 
@@ -13,13 +13,18 @@ export class EnemySystem {
     this.spawnInterval = WAVE_CONFIG.baseInterval;
     this.spawnRateMult = 1; // external multiplier (boss pause, etc.)
     this.realmIndex = 0;
+    this.bossAlive = false;  // suppresses miniboss + reduces cap
     this.curseSpeedMult = 1;
+  }
+
+  get effectiveCap() {
+    return this.bossAlive ? REALM_CONFIG.bossEnemyCap : WAVE_CONFIG.maxEnemies;
   }
 
   update(dt, realmElapsed, effectiveMinutes, player, camera, grid) {
     // Spawn timer (affected by external rate multiplier)
     this.spawnTimer -= dt * this.spawnRateMult;
-    if (this.spawnTimer <= 0 && this.enemies.length < WAVE_CONFIG.maxEnemies) {
+    if (this.spawnTimer <= 0 && this.enemies.length < this.effectiveCap) {
       this.spawnTimer = this.spawnInterval;
       this.spawnInterval = Math.max(
         WAVE_CONFIG.minInterval,
@@ -121,7 +126,7 @@ export class EnemySystem {
   }
 
   _hasCapacity(count = 1) {
-    return this.enemies.length + count <= WAVE_CONFIG.maxEnemies;
+    return this.enemies.length + count <= this.effectiveCap;
   }
 
   _spawnWave(player, camera, realmElapsed, effectiveMinutes) {
@@ -129,7 +134,7 @@ export class EnemySystem {
     const keys = Object.keys(weights);
     const vals = keys.map(k => weights[k]);
 
-    const ri = Math.min(this.realmIndex, REALM_CONFIG.maxRealms - 1);
+    const ri = Math.min(this.realmIndex, REALM_DEFS.length - 1);
     let count = 2 + Math.floor(realmElapsed / 35) + ri * REALM_CONFIG.waveSizePerRealm;
 
     if (realmElapsed > 120) {
@@ -365,6 +370,7 @@ export class EnemySystem {
     this.spawnTimer = 0;
     this.spawnInterval = WAVE_CONFIG.baseInterval;
     this.spawnRateMult = 1;
+    this.bossAlive = false;
     this.curseSpeedMult = 1;
   }
 
@@ -373,6 +379,7 @@ export class EnemySystem {
     this.spawnTimer = 0;
     this.spawnInterval = WAVE_CONFIG.baseInterval;
     this.spawnRateMult = 1;
+    this.bossAlive = false;
   }
 
   // Force-spawn a realm boss, evicting far trash if at cap
@@ -425,7 +432,10 @@ export class EnemySystem {
   triggerSurgeBurst(player, camera, realmElapsed, effectiveMinutes) {
     const count = Math.min(8, 4 + Math.floor(realmElapsed / 90));
     for (let i = 0; i < count; i++) {
-      const typeKey = realmElapsed > WAVE_CONFIG.eliteStartTime && i === 0 ? 'ravager' : 'crawler';
+      // Suppress elite spawns during boss phase; use per-realm elite timing
+      const realmEliteStart = REALM_DEFS[Math.min(this.realmIndex, REALM_DEFS.length - 1)].eliteStartTime;
+      const useElite = !this.bossAlive && realmElapsed > realmEliteStart && i === 0;
+      const typeKey = useElite ? 'ravager' : 'crawler';
       this._spawnEnemy(typeKey, player, camera, effectiveMinutes, i, count);
     }
   }

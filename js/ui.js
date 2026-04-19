@@ -1,7 +1,7 @@
 // ── UI: HUD + Upgrade selection ──
 
-import { COMPANION_DEFS, DROPPABLE_COMPANIONS, MODIFIERS, getModifiersForType, EVOLUTIONS, getEvolveLevel, TRADEOFF_CARDS, CURSED_CARDS } from './data/companions.js?v=5';
-import { pick, weightedPick } from './utils.js?v=5';
+import { COMPANION_DEFS, DROPPABLE_COMPANIONS, MODIFIERS, getModifiersForType, EVOLUTIONS, getEvolveLevel, TRADEOFF_CARDS, CURSED_CARDS } from './data/companions.js?v=6';
+import { pick, weightedPick } from './utils.js?v=6';
 
 // Rarity weight multipliers — lower = rarer
 const RARITY_WEIGHTS = { common: 1, rare: 0.45, epic: 0.18, cursed: 0.10 };
@@ -23,7 +23,7 @@ export class UI {
     this._modalHeading = this.upgradeModal.querySelector('h2');
   }
 
-  updateHUD(player, elapsed, realmIndex) {
+  updateHUD(player, elapsed, realmIndex, realmState, realmDef) {
     const xpPct = (player.xp / player.xpToNext) * 100;
     this.xpBar.style.width = xpPct + '%';
     this.xpText.textContent = `Lv ${player.level}`;
@@ -34,7 +34,8 @@ export class UI {
 
     const m = Math.floor(elapsed / 60);
     const s = Math.floor(elapsed % 60);
-    this.timer.textContent = `R${realmIndex + 1} ${m}:${s.toString().padStart(2, '0')}`;
+    const realmLabel = realmDef ? realmDef.name : `Realm ${realmIndex + 1}`;
+    this.timer.textContent = `${realmLabel} · ${m}:${s.toString().padStart(2, '0')}`;
 
     this.killCount.textContent = `Kills: ${player.kills}`;
   }

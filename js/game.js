@@ -1,20 +1,20 @@
 // ── Game state manager ──
 
-import { Player } from './player.js?v=5';
-import { Companion, processOrbitDamage } from './companion.js?v=5';
-import { EnemySystem } from './enemy.js?v=5';
-import { ProjectileSystem } from './projectile.js?v=5';
-import { XPSystem } from './xp.js?v=5';
-import { Particles } from './particles.js?v=5';
-import { Camera } from './camera.js?v=5';
-import { UI } from './ui.js?v=5';
-import { Progression } from './progression.js?v=5';
-import { processCollisions, handleProjectileHit } from './collision.js?v=5';
-import { SpatialGrid } from './spatial-grid.js?v=5';
-import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel } from './data/companions.js?v=5';
-import { COLORS } from './data/colors.js?v=5';
-import { REALM_CONFIG } from './data/enemies.js?v=5';
-import { formatTime, dist, weightedPick } from './utils.js?v=5';
+import { Player } from './player.js?v=6';
+import { Companion, processOrbitDamage } from './companion.js?v=6';
+import { EnemySystem } from './enemy.js?v=6';
+import { ProjectileSystem } from './projectile.js?v=6';
+import { XPSystem } from './xp.js?v=6';
+import { Particles } from './particles.js?v=6';
+import { Camera } from './camera.js?v=6';
+import { UI } from './ui.js?v=6';
+import { Progression } from './progression.js?v=6';
+import { processCollisions, handleProjectileHit } from './collision.js?v=6';
+import { SpatialGrid } from './spatial-grid.js?v=6';
+import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel } from './data/companions.js?v=6';
+import { COLORS } from './data/colors.js?v=6';
+import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=6';
+import { formatTime, dist, weightedPick } from './utils.js?v=6';
 
 export class Game {
   constructor(canvas, input) {
@@ -240,7 +240,8 @@ export class Game {
     this.input.update();
 
     // Compute realm-aware scaling
-    const ri = Math.min(this._realmIndex, REALM_CONFIG.maxRealms - 1);
+    const realmDef = REALM_DEFS[Math.min(this._realmIndex, REALM_DEFS.length - 1)];
+    const ri = Math.min(this._realmIndex, REALM_DEFS.length - 1);
     const effectiveMinutes = this._realmElapsed / 60 + ri * REALM_CONFIG.scalingOffset;
 
     // Player
@@ -286,16 +287,18 @@ export class Game {
 
     // ── Realm state machine ──
     if (this._realmState === 'active') {
-      if (this._realmElapsed >= REALM_CONFIG.realmDuration) {
+      if (this._realmElapsed >= realmDef.duration) {
         // Spawn realm boss
-        const bossType = REALM_CONFIG.bossTypes[ri] || 'voidlord';
+        const bossType = realmDef.bossType || 'voidlord';
         this._realmBossId = this.enemySystem.forceSpawnBoss(
           bossType, this.player, this.camera, effectiveMinutes, this._realmIndex
         );
         this._realmState = 'boss';
-        this.particles.text(this.player.x, this.player.y - 50, `⚠ REALM BOSS!`, '#ff2222', 22);
+        this.enemySystem.bossAlive = true;
+        this.enemySystem.spawnRateMult = REALM_CONFIG.bossSpawnMult;
+        this.particles.text(this.player.x, this.player.y - 50,
+          `⚠ ${realmDef.name} BOSS!`, '#ff2222', 22);
         this.camera.applyShake();
-        this.enemySystem.spawnRateMult = REALM_CONFIG.spawnPauseDuringBoss;
       }
     } else if (this._realmState === 'portal') {
       this._portalTimer -= dt;
@@ -455,9 +458,10 @@ export class Game {
           this._realmState = 'portal';
           this._portalTimer = REALM_CONFIG.portalDuration;
           this._portalRingT = 0;
+          this.enemySystem.bossAlive = false;
           this.enemySystem.spawnRateMult = 0; // stop spawning during portal
           this.particles.text(this.player.x, this.player.y - 50,
-            `REALM ${this._realmIndex + 1} CLEARED!`, '#ffd700', 22);
+            `${realmDef.name} CLEARED!`, '#ffd700', 22);
           this.camera.applyShake();
         }
 
@@ -490,7 +494,7 @@ export class Game {
     this.particles.update(dt);
 
     // Update HUD
-    this.ui.updateHUD(this.player, this.elapsed, this._realmIndex);
+    this.ui.updateHUD(this.player, this.elapsed, this._realmIndex, this._realmState, realmDef);
 
     // Check death
     if (!this.player.alive) {
@@ -599,6 +603,11 @@ export class Game {
     // Portal ring during realm transition
     if (this._realmState === 'portal') {
       this._drawPortalRing(ctx, cam);
+    }
+
+    // Boss HP bar during boss phase
+    if (this._realmState === 'boss') {
+      this._drawBossHPBar(ctx);
     }
 
     // Ultimate cooldown indicator
@@ -1059,10 +1068,45 @@ export class Game {
 
     // Realm label
     ctx.save();
+    const nextDef = REALM_DEFS[Math.min(this._realmIndex + 1, REALM_DEFS.length - 1)];
     ctx.fillStyle = `rgba(255,255,255,${0.6 + 0.3 * pulse})`;
     ctx.font = 'bold 16px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(`REALM ${this._realmIndex + 2}`, sx, sy - radius - 10);
+    ctx.fillText(nextDef.name, sx, sy - radius - 10);
+    ctx.restore();
+  }
+
+  _drawBossHPBar(ctx) {
+    // Find the boss enemy
+    const boss = this.enemySystem.enemies.find(e => e.id === this._realmBossId);
+    if (!boss) return;
+
+    const barW = 300, barH = 16;
+    const x = (ctx.canvas.width - barW) / 2;
+    const y = 50;
+    const hpFrac = Math.max(0, boss.hp / boss.maxHp);
+
+    const realmDef = REALM_DEFS[Math.min(this._realmIndex, REALM_DEFS.length - 1)];
+
+    // Background
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(x - 2, y - 2, barW + 4, barH + 4);
+
+    // HP fill
+    ctx.fillStyle = hpFrac > 0.5 ? '#cc2222' : hpFrac > 0.25 ? '#cc6600' : '#ff0000';
+    ctx.fillRect(x, y, barW * hpFrac, barH);
+
+    // Border
+    ctx.strokeStyle = '#ff4444';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - 2, y - 2, barW + 4, barH + 4);
+
+    // Label
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`⚠ ${realmDef.name} BOSS`, ctx.canvas.width / 2, y - 6);
     ctx.restore();
   }
 
@@ -1321,11 +1365,12 @@ export class Game {
     this.enemySystem.realmIndex = this._realmIndex;
 
     // Apply realm-based spawn interval compression
-    const ri = Math.min(this._realmIndex, REALM_CONFIG.maxRealms - 1);
+    const ri = Math.min(this._realmIndex, REALM_DEFS.length - 1);
     this.enemySystem.spawnInterval *= Math.pow(REALM_CONFIG.intervalPerRealm, ri);
 
+    const nextDef = REALM_DEFS[Math.min(this._realmIndex, REALM_DEFS.length - 1)];
     this.particles.text(this.player.x, this.player.y - 50,
-      `REALM ${this._realmIndex + 1}`, '#00ffcc', 24);
+      nextDef.name, '#00ffcc', 24);
     this.camera.applyShake();
   }
 
