@@ -1,8 +1,0 @@
-{
-  "image": "bosses.png",
-  "frames": {
-    "boss_ashen_core_a":      { "x": 0,   "y": 0, "w": 48, "h": 48 },
-    "boss_ashen_node_a":       { "x": 50,  "y": 0, "w": 48, "h": 48 },
-    "boss_ashen_weakpoint_a":  { "x": 100, "y": 0, "w": 48, "h": 48 }
-  }
-}

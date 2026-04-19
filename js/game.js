@@ -1,20 +1,20 @@
 // ── Game state manager ──
 
-import { Player } from './player.js?v=15';
-import { Companion, processOrbitDamage } from './companion.js?v=15';
-import { EnemySystem } from './enemy.js?v=15';
-import { ProjectileSystem } from './projectile.js?v=15';
-import { XPSystem } from './xp.js?v=15';
-import { Particles } from './particles.js?v=15';
-import { Camera } from './camera.js?v=15';
-import { UI } from './ui.js?v=15';
-import { Progression } from './progression.js?v=15';
-import { processCollisions, handleProjectileHit } from './collision.js?v=15';
-import { SpatialGrid } from './spatial-grid.js?v=15';
-import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue, MODIFIERS } from './data/companions.js?v=15';
-import { COLORS } from './data/colors.js?v=15';
-import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=15';
-import { formatTime, dist, weightedPick } from './utils.js?v=15';
+import { Player } from './player.js?v=16';
+import { Companion, processOrbitDamage } from './companion.js?v=16';
+import { EnemySystem } from './enemy.js?v=16';
+import { ProjectileSystem } from './projectile.js?v=16';
+import { XPSystem } from './xp.js?v=16';
+import { Particles } from './particles.js?v=16';
+import { Camera } from './camera.js?v=16';
+import { UI } from './ui.js?v=16';
+import { Progression } from './progression.js?v=16';
+import { processCollisions, handleProjectileHit } from './collision.js?v=16';
+import { SpatialGrid } from './spatial-grid.js?v=16';
+import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue, MODIFIERS } from './data/companions.js?v=16';
+import { COLORS } from './data/colors.js?v=16';
+import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=16';
+import { formatTime, dist, weightedPick } from './utils.js?v=16';
 
 export class Game {
   constructor(canvas, input, sprites) {
@@ -1031,9 +1031,10 @@ export class Game {
       chest: '🎁',
     };
     const now = performance.now() * 0.004;
-    // Sprite frame mapping: game pickup type → atlas frame name
+    // Sprite key mapping: game pickup type → sprite key
     const SPRITE_MAP = {
-      heal: 'pickup_heal_small',
+      heal: 'pickup_orb_green_a',
+      essence_surge: 'pickup_crystal_blue_a',
     };
 
     for (const p of this.pickups) {
@@ -1061,10 +1062,10 @@ export class Game {
       }
       ctx.globalAlpha = fadeAlpha;
 
-      // Sprite path: draw atlas frame if available
-      const spriteName = SPRITE_MAP[p.type];
-      if (spriteName && this.sprites?.drawSprite(ctx, 'pickups', spriteName, sx, sy + bob, p.radius * 2.4, p.radius * 2.4, 0, fadeAlpha)) {
-        // drawn by sprite — skip canvas
+      // Sprite path
+      const spriteKey = SPRITE_MAP[p.type];
+      if (spriteKey && this.sprites?.drawSprite(ctx, spriteKey, sx, sy + bob, p.radius * 2.4, p.radius * 2.4, 0, fadeAlpha)) {
+        // drawn by sprite
       } else {
         // Canvas fallback
         ctx.beginPath();
@@ -1143,10 +1144,10 @@ export class Game {
     // ── Sprite portal layers (behind canvas effects) ──
     // Layer 1: outer ring — rotating, pulsing size
     const outerSize = baseR * 2.6;
-    this.sprites?.drawSprite(ctx, 'portal', 'portal_outer_ring_a', sx, sy, outerSize, outerSize, t * 0.5, 0.6 + 0.2 * pulse);
-    // Layer 2: inner core — counter-rotating, smaller
+    this.sprites?.drawSprite(ctx, 'portal_ring_a', sx, sy, outerSize, outerSize, t * 0.5, 0.6 + 0.2 * pulse);
+    // Layer 2: inner swirl — counter-rotating, smaller
     const innerSize = baseR * 1.4;
-    this.sprites?.drawSprite(ctx, 'portal', 'portal_inner_core_a', sx, sy, innerSize, innerSize, -t * 0.8, 0.5 + 0.3 * pulse);
+    this.sprites?.drawSprite(ctx, 'portal_swirl_a', sx, sy, innerSize, innerSize, -t * 0.8, 0.5 + 0.3 * pulse);
 
     // ── 1. Inner swirling gradient (3 offset radial fills) ──
     const innerR = baseR * 0.7;
