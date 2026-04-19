@@ -187,10 +187,12 @@ canvas#joystick {
 }
 
 #upgrade-modal {
-  position: absolute;
+  position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(2, 2, 8, 0.96);
   display: flex;
+  align-items: center;
+  justify-content: center;
   z-index: 100;
   padding: 16px;
   padding-top: calc(16px + env(safe-area-inset-top, 0px));
@@ -206,8 +208,7 @@ canvas#joystick {
   max-width: 420px;
   width: 95%;
   gap: 16px;
-  /* auto margins center when space available, collapse when scrolling */
-  margin: auto;
+  margin: 0;
   flex-shrink: 0;
 }
 
@@ -660,6 +661,14 @@ canvas#joystick {
   .death-breakdown { font-size: 12px; }
   .death-breakdown-mods { font-size: 9px; }
   .death-build-label { font-size: 17px; margin-bottom: 10px; }
+}
+
+/* Short viewport fallback: when content can't fit centered, top-align with padding */
+@media (max-height: 580px) {
+  #upgrade-modal {
+    align-items: flex-start;
+    padding-top: calc(20px + env(safe-area-inset-top, 0px));
+  }
 }
 
 /* ── Touch Debug Mode ── */
