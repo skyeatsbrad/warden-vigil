@@ -505,7 +505,7 @@ export class EnemySystem {
       } else if (e.tier !== 'boss') {
         // Try sprite for basic/elite enemies
         const spriteKey = ENEMY_SPRITE_MAP[e.type];
-        const size = e.radius * 2.2;
+        const size = e.radius * 2.0;
         if (!spriteKey || !sprites?.drawSprite(ctx, spriteKey, sx, sy, size, size)) {
           // Canvas fallback
           ctx.beginPath();

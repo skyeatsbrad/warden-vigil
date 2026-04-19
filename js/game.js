@@ -1062,9 +1062,9 @@ export class Game {
       }
       ctx.globalAlpha = fadeAlpha;
 
-      // Sprite path
+      // Sprite path — globalAlpha already set to fadeAlpha above
       const spriteKey = SPRITE_MAP[p.type];
-      if (spriteKey && this.sprites?.drawSprite(ctx, spriteKey, sx, sy + bob, p.radius * 2.4, p.radius * 2.4, 0, fadeAlpha)) {
+      if (spriteKey && this.sprites?.drawSprite(ctx, spriteKey, sx, sy + bob, p.radius * 2.0, p.radius * 2.0)) {
         // drawn by sprite
       } else {
         // Canvas fallback
@@ -1142,12 +1142,12 @@ export class Game {
     const sy = cam.screenY(this.player.y);
 
     // ── Sprite portal layers (behind canvas effects) ──
-    // Layer 1: outer ring — rotating, pulsing size
-    const outerSize = baseR * 2.6;
-    this.sprites?.drawSprite(ctx, 'portal_ring_a', sx, sy, outerSize, outerSize, t * 0.5, 0.6 + 0.2 * pulse);
+    // Layer 1: outer ring — rotating, pulsing size (matches procedural ring radius)
+    const outerSize = baseR * 2.2;
+    this.sprites?.drawSprite(ctx, 'portal_ring_a', sx, sy, outerSize, outerSize, t * 0.7, 0.55 + 0.25 * pulse);
     // Layer 2: inner swirl — counter-rotating, smaller
     const innerSize = baseR * 1.4;
-    this.sprites?.drawSprite(ctx, 'portal_swirl_a', sx, sy, innerSize, innerSize, -t * 0.8, 0.5 + 0.3 * pulse);
+    this.sprites?.drawSprite(ctx, 'portal_swirl_a', sx, sy, innerSize, innerSize, -t * 1.0, 0.45 + 0.35 * pulse);
 
     // ── 1. Inner swirling gradient (3 offset radial fills) ──
     const innerR = baseR * 0.7;
