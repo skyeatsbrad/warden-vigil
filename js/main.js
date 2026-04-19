@@ -1,7 +1,8 @@
 // ── Main entry point ──
 
-import { Game } from './game.js?v=13';
-import { Input } from './input.js?v=13';
+import { Game } from './game.js?v=14';
+import { Input } from './input.js?v=14';
+import { SpriteManager } from './sprites.js?v=14';
 
 const canvas = document.getElementById('game');
 const joystickCanvas = document.getElementById('joystick');
@@ -14,8 +15,14 @@ if (new URLSearchParams(window.location.search).has('touchdebug')) {
 // Input
 const input = new Input(joystickCanvas);
 
+// Sprites — preload atlases, then start game
+const sprites = new SpriteManager();
+sprites.load().then(ok => {
+  if (!ok) console.warn('[main] Some sprite atlases failed to load — using canvas fallback');
+});
+
 // Game
-const game = new Game(canvas, input);
+const game = new Game(canvas, input, sprites);
 
 // Resize handling
 function resize() {

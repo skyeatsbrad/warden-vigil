@@ -17,10 +17,11 @@ import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=13';
 import { formatTime, dist, weightedPick } from './utils.js?v=13';
 
 export class Game {
-  constructor(canvas, input) {
+  constructor(canvas, input, sprites) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.input = input;
+    this.sprites = sprites || null;
 
     this.state = 'title'; // title | playing | upgrading | gameover
     this.elapsed = 0;
@@ -599,7 +600,7 @@ export class Game {
     }
 
     // Enemies
-    this.enemySystem.draw(ctx, cam);
+    this.enemySystem.draw(ctx, cam, this.sprites);
 
     // Projectiles (above enemies)
     this.projectiles.draw(ctx, cam);
@@ -1030,6 +1031,8 @@ export class Game {
       chest: '🎁',
     };
     const now = performance.now() * 0.004;
+    const useSprites = this.sprites?.has('pickups', 'heal');
+
     for (const p of this.pickups) {
       if (!cam.isVisible(p.x, p.y, 15)) continue;
       const sx = cam.screenX(p.x);
@@ -1038,35 +1041,43 @@ export class Game {
       const color = PICKUP_COLORS[p.type];
 
       // Fade when about to expire
-      ctx.globalAlpha = p.life < 3 ? 0.3 + 0.7 * (p.life / 3) : 1;
+      const fadeAlpha = p.life < 3 ? 0.3 + 0.7 * (p.life / 3) : 1;
+      ctx.globalAlpha = fadeAlpha;
 
-      // Sparkle ring (cheap rotating dots)
+      // Sparkle ring (cheap rotating dots) — kept for both sprite and canvas
       const sparkPhase = now * 2 + p.x * 0.01;
       for (let s = 0; s < 3; s++) {
         const a = sparkPhase + s * (Math.PI * 2 / 3);
         const sparkR = p.radius + 5 + Math.sin(now * 3 + s) * 2;
         const sparkAlpha = Math.sin(now * 4 + s * 2) * 0.3 + 0.4;
-        ctx.globalAlpha *= sparkAlpha;
+        ctx.globalAlpha = fadeAlpha * sparkAlpha;
         ctx.beginPath();
         ctx.arc(sx + Math.cos(a) * sparkR, sy + bob + Math.sin(a) * sparkR, 1.2, 0, Math.PI * 2);
         ctx.fillStyle = '#fff';
         ctx.fill();
-        ctx.globalAlpha = p.life < 3 ? 0.3 + 0.7 * (p.life / 3) : 1;
       }
+      ctx.globalAlpha = fadeAlpha;
 
-      ctx.beginPath();
-      ctx.arc(sx, sy + bob, p.radius, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 10;
-      ctx.fill();
-      ctx.shadowBlur = 0;
+      // Sprite path: draw atlas frame
+      if (useSprites && this.sprites.has('pickups', p.type)) {
+        const size = p.radius * 2.4;
+        this.sprites.draw(ctx, 'pickups', p.type, sx, sy + bob, size, size);
+      } else {
+        // Canvas fallback
+        ctx.beginPath();
+        ctx.arc(sx, sy + bob, p.radius, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 10;
+        ctx.fill();
+        ctx.shadowBlur = 0;
 
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 10px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(PICKUP_ICONS[p.type], sx, sy + bob);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(PICKUP_ICONS[p.type], sx, sy + bob);
+      }
 
       ctx.globalAlpha = 1;
     }
@@ -1125,6 +1136,13 @@ export class Game {
     const baseR = 60 + 20 * pulse;
     const sx = cam.screenX(this.player.x);
     const sy = cam.screenY(this.player.y);
+
+    // ── Sprite portal layer (behind canvas effects) ──
+    if (this.sprites?.has('portal', 'frame0')) {
+      const frameIdx = Math.floor(t * 6) % 4;
+      const size = baseR * 2.4;
+      this.sprites.drawRotated(ctx, 'portal', frameIdx, sx, sy, size, size, t * 0.5);
+    }
 
     // ── 1. Inner swirling gradient (3 offset radial fills) ──
     const innerR = baseR * 0.7;

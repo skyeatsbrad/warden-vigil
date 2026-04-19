@@ -434,8 +434,10 @@ export class EnemySystem {
     }
   }
 
-  draw(ctx, camera) {
+  draw(ctx, camera, sprites) {
     const now = performance.now();
+    const useSprites = sprites?.has('enemies', 'runner');
+
     for (const e of this.enemies) {
       if (!e || e.hp <= 0) continue;
       if (!camera.isVisible(e.x, e.y, e.radius + 20)) continue;
@@ -474,7 +476,6 @@ export class EnemySystem {
         ctx.beginPath();
         ctx.arc(sx, sy, glowR, 0, Math.PI * 2);
         if (e.tier === 'boss') {
-          // Boss: static full alpha (no hex churn)
           ctx.fillStyle = e._color30 || (e._color30 = e.color + '30');
         } else {
           const pulse = Math.sin(now * 0.004 + (e.id || 0)) * 0.3 + 0.7;
@@ -486,17 +487,30 @@ export class EnemySystem {
         ctx.shadowBlur = 0;
       }
 
-      // Main body
-      ctx.beginPath();
-      ctx.arc(sx, sy, e.radius, 0, Math.PI * 2);
+      // Main body — sprite or canvas circle
       if (e.hitFlash > 0) {
-        // Stronger hit flash: white fill with brief glow halo
+        // Hit flash always canvas (white fill)
+        ctx.beginPath();
+        ctx.arc(sx, sy, e.radius, 0, Math.PI * 2);
         ctx.fillStyle = '#fff';
         ctx.shadowColor = '#fff';
         ctx.shadowBlur = GLOW.hit;
         ctx.fill();
         ctx.shadowBlur = 0;
+      } else if (useSprites && e.tier !== 'boss') {
+        // Try sprite for basic/elite enemies
+        const frameKey = e.tier === 'elite' ? `elite_${e.type}` : e.type;
+        const size = e.radius * 2.2;
+        if (!sprites.draw(ctx, 'enemies', frameKey, sx, sy, size, size)) {
+          // Fallback: canvas circle
+          ctx.beginPath();
+          ctx.arc(sx, sy, e.radius, 0, Math.PI * 2);
+          ctx.fillStyle = e.color;
+          ctx.fill();
+        }
       } else {
+        ctx.beginPath();
+        ctx.arc(sx, sy, e.radius, 0, Math.PI * 2);
         ctx.fillStyle = e.color;
         ctx.fill();
       }
