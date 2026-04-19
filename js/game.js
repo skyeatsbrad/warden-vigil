@@ -1518,27 +1518,33 @@ export class Game {
     const momentumLabels = ['None', 'Bronze', 'Silver', 'Gold'];
 
     const statsEl = document.getElementById('run-stats');
+    const synergyLine = activeSynergies.length > 0
+      ? `<div class="death-synergies">Synergies: <strong style="color:#ffd700">${activeSynergies.join(', ')}</strong></div>` : '';
+    const curseLine = curseNames.length > 0
+      ? `<div class="death-synergies">Curses: <strong style="color:#b07ee8">${curseNames.join(', ')}</strong></div>` : '';
+
+    const breakdownRows = this.companions.map(c => {
+      const n = c.evolutionDef ? c.evolutionDef.name : c.def.name;
+      const dmg = Math.round(c._totalDamage).toLocaleString();
+      const mods = c.modifiers.length > 0 ? ` [${c.modifiers.join(', ')}]` : '';
+      return `<div class="death-breakdown-row"><span class="death-breakdown-name">${n} Lv${c.level}${mods}</span><span class="death-breakdown-dmg">${dmg} dmg</span></div>`;
+    }).join('');
+
     statsEl.innerHTML = `
-      <div style="font-size:20px;color:#ffd700;margin-bottom:8px">${buildLabel}</div>
-      <div style="font-size:12px;color:#aaa;margin-bottom:12px">Build Identity</div>
-      Time survived: <strong>${formatTime(this.elapsed)}</strong><br>
-      Level reached: <strong>${this.player.level}</strong><br>
-      Enemies slain: <strong>${this.player.kills}</strong><br>
-      Realms reached: <strong>${this._realmIndex + 1}</strong><br>
-      Total damage: <strong>${Math.round(this._totalDamageDealt).toLocaleString()}</strong><br>
-      Top source: <strong>${topName}</strong><br>
-      Surges survived: <strong>${this._surgesCompleted}/${this._surgeCount}</strong><br>
-      Peak momentum: <strong>${momentumLabels[this._maxMomentumTier]}</strong><br>
-      ${activeSynergies.length > 0 ? `Synergies: <strong style="color:#ffd700">${activeSynergies.join(', ')}</strong><br>` : ''}
-      ${curseNames.length > 0 ? `Curses: <strong style="color:#9b59b6">${curseNames.join(', ')}</strong><br>` : ''}
-      <div style="margin-top:8px;font-size:12px;color:#888">
-        ${this.companions.map(c => {
-          const n = c.evolutionDef ? c.evolutionDef.name : c.def.name;
-          const dmg = Math.round(c._totalDamage).toLocaleString();
-          const mods = c.modifiers.length > 0 ? ` [${c.modifiers.join(', ')}]` : '';
-          return `${n} Lv${c.level}: ${dmg} dmg${mods}`;
-        }).join('<br>')}
+      <div class="death-build-label">${buildLabel}</div>
+      <div class="death-build-sub">Build Identity</div>
+      <div class="death-stat-grid">
+        <span>Time</span><strong>${formatTime(this.elapsed)}</strong>
+        <span>Level</span><strong>${this.player.level}</strong>
+        <span>Kills</span><strong>${this.player.kills}</strong>
+        <span>Realms</span><strong>${this._realmIndex + 1}</strong>
+        <span>Damage</span><strong>${Math.round(this._totalDamageDealt).toLocaleString()}</strong>
+        <span>Top source</span><strong>${topName}</strong>
+        <span>Surges</span><strong>${this._surgesCompleted}/${this._surgeCount}</strong>
+        <span>Momentum</span><strong>${momentumLabels[this._maxMomentumTier]}</strong>
       </div>
+      ${synergyLine}${curseLine}
+      <div class="death-breakdown">${breakdownRows}</div>
     `;
     document.getElementById('gameover-screen').classList.remove('hidden');
   }

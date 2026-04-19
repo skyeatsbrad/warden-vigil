@@ -190,10 +190,10 @@ export class UI {
         statLine += `Grants: ${modNames}`;
       }
       card.innerHTML = `
-        <div class="card-icon" style="font-size:42px">${e.icon}</div>
+        <div class="card-icon">${e.icon}</div>
         <div class="card-title" style="color:${e.color}">${e.name}</div>
         <div class="card-desc">${e.desc}</div>
-        <div class="card-desc" style="margin-top:6px;color:#ddd;font-size:11px">${statLine}</div>
+        <div class="card-desc evo-stat-line">${statLine}</div>
         <div class="card-rarity rarity-legendary">EVOLUTION</div>
       `;
       card.addEventListener('click', () => {
