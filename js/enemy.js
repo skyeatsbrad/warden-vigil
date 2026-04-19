@@ -1,8 +1,8 @@
 // ── Enemy spawning + AI ──
 
-import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy, scaleRealmBoss, REALM_CONFIG, REALM_DEFS, BOSS_TUNING } from './data/enemies.js?v=12';
-import { weightedPick } from './utils.js?v=12';
-import { GLOW } from './data/colors.js?v=12';
+import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy, scaleRealmBoss, REALM_CONFIG, REALM_DEFS, BOSS_TUNING } from './data/enemies.js?v=13';
+import { weightedPick } from './utils.js?v=13';
+import { GLOW } from './data/colors.js?v=13';
 
 let _nextEnemyId = 0;
 

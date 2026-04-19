@@ -1,7 +1,7 @@
 // ── Collision & damage ──
 
-import { dist } from './utils.js?v=12';
-import { COLORS } from './data/colors.js?v=12';
+import { dist } from './utils.js?v=13';
+import { COLORS } from './data/colors.js?v=13';
 
 export function processCollisions(player, enemies, particles, camera, grid, enemySystem) {
   // Use grid to check only nearby enemies instead of scanning all
@@ -101,9 +101,11 @@ export function handleProjectileHit(enemy, projectile, particles) {
     enemy.slowTimer = Math.max(enemy.slowTimer || 0, 1.5);
   }
 
-  // Hit feedback: use projectile color (cyan/blue = yours)
+  // Hit feedback: expanding ring + small burst
   const hitColor = projectile.color || COLORS.damage;
-  particles.emit(enemy.x, enemy.y, 3, hitColor, { speedMax: 60, life: 0.2 });
+  particles.spawnImpact(enemy.x, enemy.y, hitColor, {
+    maxRadius: enemy.radius + 8, lifetime: 0.25, particles: 4, particleSpeed: 60, particleSize: 2,
+  });
   particles.text(enemy.x, enemy.y - enemy.radius, dmg.toString(), hitColor);
 
   return actualDmg;

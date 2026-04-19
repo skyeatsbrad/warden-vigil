@@ -1,20 +1,20 @@
 // ── Game state manager ──
 
-import { Player } from './player.js?v=12';
-import { Companion, processOrbitDamage } from './companion.js?v=12';
-import { EnemySystem } from './enemy.js?v=12';
-import { ProjectileSystem } from './projectile.js?v=12';
-import { XPSystem } from './xp.js?v=12';
-import { Particles } from './particles.js?v=12';
-import { Camera } from './camera.js?v=12';
-import { UI } from './ui.js?v=12';
-import { Progression } from './progression.js?v=12';
-import { processCollisions, handleProjectileHit } from './collision.js?v=12';
-import { SpatialGrid } from './spatial-grid.js?v=12';
-import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue } from './data/companions.js?v=12';
-import { COLORS } from './data/colors.js?v=12';
-import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=12';
-import { formatTime, dist, weightedPick } from './utils.js?v=12';
+import { Player } from './player.js?v=13';
+import { Companion, processOrbitDamage } from './companion.js?v=13';
+import { EnemySystem } from './enemy.js?v=13';
+import { ProjectileSystem } from './projectile.js?v=13';
+import { XPSystem } from './xp.js?v=13';
+import { Particles } from './particles.js?v=13';
+import { Camera } from './camera.js?v=13';
+import { UI } from './ui.js?v=13';
+import { Progression } from './progression.js?v=13';
+import { processCollisions, handleProjectileHit } from './collision.js?v=13';
+import { SpatialGrid } from './spatial-grid.js?v=13';
+import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue } from './data/companions.js?v=13';
+import { COLORS } from './data/colors.js?v=13';
+import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=13';
+import { formatTime, dist, weightedPick } from './utils.js?v=13';
 
 export class Game {
   constructor(canvas, input) {
@@ -358,14 +358,6 @@ export class Game {
     if (this._panicRingT > 0) this._panicRingT -= dt;
     if (this._ultBloomT > 0) this._ultBloomT -= dt;
 
-    // Tick death rings
-    for (let i = this._deathRings.length - 1; i >= 0; i--) {
-      this._deathRings[i].t += dt;
-      if (this._deathRings[i].t >= this._deathRings[i].maxT) {
-        this._deathRings.splice(i, 1);
-      }
-    }
-
     // Apply curse spawn rate multiplier
     if (this._curseSpawnMult !== 1) {
       this.enemySystem.spawnTimer -= dt * (1 / this._curseSpawnMult - 1);
@@ -419,16 +411,14 @@ export class Game {
         this._momentum += 1;
         this.xpSystem.spawnFromEnemy(e);
 
-        // Enhanced kill particles: elites/bosses get bigger feedback + camera shake
+        // Enhanced kill feedback: impact ring + radial burst
         const isElite = e.tier === 'elite' || e.tier === 'miniboss' || e.tier === 'boss';
-        const particleCount = isElite ? 20 : 10;
-        this.particles.emit(e.x, e.y, particleCount, e.color, { speedMax: isElite ? 160 : 100, life: isElite ? 0.6 : 0.4 });
-
-        // Death ring: expanding circle on kill for satisfying feedback
-        // Death ring: expanding circle on kill (capped at 8 for perf)
-        if (this._deathRings.length < 8) {
-          this._deathRings.push({ x: e.x, y: e.y, t: 0, maxT: isElite ? 0.4 : 0.25, maxR: e.radius * (isElite ? 4 : 2.5), color: e.color });
-        }
+        this.particles.spawnImpact(e.x, e.y, e.color, {
+          maxRadius: e.radius * (isElite ? 4 : 2.5),
+          lifetime: isElite ? 0.4 : 0.25,
+          particles: isElite ? 10 : 6,
+          particleSpeed: isElite ? 160 : 100,
+        });
 
         if (isElite) {
           this.camera.applyShake();
@@ -606,11 +596,8 @@ export class Game {
     // Player (always on top of world)
     this.player.draw(ctx, cam);
 
-    // Hit effects + particles (topmost world layer)
+    // Hit effects + particles (topmost world layer — includes impact rings)
     this.particles.draw(ctx, cam);
-
-    // Death rings (expanding kill feedback)
-    this._drawDeathRings(ctx, cam);
 
     // Panic pulse ring (screen-space effect)
     this._drawPanicRing(ctx, cam);
@@ -1180,24 +1167,6 @@ export class Game {
     ctx.textAlign = 'center';
     ctx.fillText(`⚠ ${bossName}`, ctx.canvas.width / 2, y - 6);
     ctx.restore();
-  }
-
-  _drawDeathRings(ctx, cam) {
-    for (const ring of this._deathRings) {
-      const frac = ring.t / ring.maxT;
-      const radius = ring.maxR * frac;
-      const alpha = (1 - frac) * 0.5;
-      const sx = cam.screenX(ring.x);
-      const sy = cam.screenY(ring.y);
-
-      ctx.beginPath();
-      ctx.arc(sx, sy, radius, 0, Math.PI * 2);
-      ctx.strokeStyle = ring.color;
-      ctx.globalAlpha = alpha;
-      ctx.lineWidth = 2 * (1 - frac) + 0.5;
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
   }
 
   _drawUltBloom(ctx) {
