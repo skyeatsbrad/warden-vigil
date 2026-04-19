@@ -1,8 +1,8 @@
 // ── Enemy spawning + AI ──
 
-import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy } from './data/enemies.js?v=4';
-import { weightedPick } from './utils.js?v=4';
-import { GLOW } from './data/colors.js?v=4';
+import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy, scaleRealmBoss, REALM_CONFIG } from './data/enemies.js?v=5';
+import { weightedPick } from './utils.js?v=5';
+import { GLOW } from './data/colors.js?v=5';
 
 let _nextEnemyId = 0;
 
@@ -11,37 +11,21 @@ export class EnemySystem {
     this.enemies = [];
     this.spawnTimer = 0;
     this.spawnInterval = WAVE_CONFIG.baseInterval;
-    this.bossTimer = 0;
-    this.minibossTimer = 0;
-    this.curseSpeedMult = 1; // set by game.js from cursed upgrades
+    this.spawnRateMult = 1; // external multiplier (boss pause, etc.)
+    this.realmIndex = 0;
+    this.curseSpeedMult = 1;
   }
 
-  update(dt, elapsed, player, camera, grid) {
-    const elapsedMinutes = elapsed / 60;
-
-    // Spawn timer
-    this.spawnTimer -= dt;
+  update(dt, realmElapsed, effectiveMinutes, player, camera, grid) {
+    // Spawn timer (affected by external rate multiplier)
+    this.spawnTimer -= dt * this.spawnRateMult;
     if (this.spawnTimer <= 0 && this.enemies.length < WAVE_CONFIG.maxEnemies) {
       this.spawnTimer = this.spawnInterval;
       this.spawnInterval = Math.max(
         WAVE_CONFIG.minInterval,
         this.spawnInterval * WAVE_CONFIG.spawnRateDecay
       );
-      this._spawnWave(player, camera, elapsed, elapsedMinutes);
-    }
-
-    // Mini-boss timer
-    this.minibossTimer += dt;
-    if (this.minibossTimer >= WAVE_CONFIG.minibossInterval) {
-      this.minibossTimer = 0;
-      this._spawnSpecial('ironhusk', player, camera, elapsedMinutes);
-    }
-
-    // Boss timer
-    this.bossTimer += dt;
-    if (this.bossTimer >= WAVE_CONFIG.bossInterval) {
-      this.bossTimer = 0;
-      this._spawnSpecial('voidlord', player, camera, elapsedMinutes);
+      this._spawnWave(player, camera, realmElapsed, effectiveMinutes);
     }
 
     // Update enemy AI with LOD tiers based on camera distance
@@ -140,33 +124,34 @@ export class EnemySystem {
     return this.enemies.length + count <= WAVE_CONFIG.maxEnemies;
   }
 
-  _spawnWave(player, camera, elapsed, elapsedMinutes) {
-    const weights = getSpawnWeights(elapsed);
+  _spawnWave(player, camera, realmElapsed, effectiveMinutes) {
+    const weights = getSpawnWeights(realmElapsed);
     const keys = Object.keys(weights);
     const vals = keys.map(k => weights[k]);
 
-    let count = 2 + Math.floor(elapsed / 35);
+    const ri = Math.min(this.realmIndex, REALM_CONFIG.maxRealms - 1);
+    let count = 2 + Math.floor(realmElapsed / 35) + ri * REALM_CONFIG.waveSizePerRealm;
 
-    if (elapsed > 120) {
-      count += Math.floor((elapsed - 120) / 60);
+    if (realmElapsed > 120) {
+      count += Math.floor((realmElapsed - 120) / 60);
     }
 
-    count = Math.min(count, 10);
+    count = Math.min(count, 10 + ri);
 
     for (let i = 0; i < count; i++) {
       if (!this._hasCapacity(1)) break;
       const typeKey = weightedPick(keys, vals);
-      this._spawnEnemy(typeKey, player, camera, elapsedMinutes, i, count);
+      this._spawnEnemy(typeKey, player, camera, effectiveMinutes, i, count);
     }
   }
 
-  _spawnEnemy(typeKey, player, camera, elapsedMinutes, indexInWave = 0, waveCount = 1) {
+  _spawnEnemy(typeKey, player, camera, effectiveMinutes, indexInWave = 0, waveCount = 1) {
     if (!this._hasCapacity(1)) return false;
 
     const base = ENEMY_TYPES[typeKey];
     if (!base) return false;
 
-    const scaled = scaleEnemy(base, elapsedMinutes);
+    const scaled = scaleEnemy(base, effectiveMinutes);
 
     // Spawn off-screen with spread so waves do not stack on one point
     const margin = 90;
@@ -379,18 +364,69 @@ export class EnemySystem {
     this.enemies.length = 0;
     this.spawnTimer = 0;
     this.spawnInterval = WAVE_CONFIG.baseInterval;
-    this.bossTimer = 0;
-    this.minibossTimer = 0;
+    this.spawnRateMult = 1;
     this.curseSpeedMult = 1;
   }
 
-  // Force-spawn a surge burst (bypasses capacity check for initial wave)
-  triggerSurgeBurst(player, camera, elapsed) {
-    const elapsedMinutes = elapsed / 60;
-    const count = Math.min(8, 4 + Math.floor(elapsed / 90));
+  // Reset spawn pacing for a new realm (keeps enemy list intact until despawnAll)
+  resetForRealm() {
+    this.spawnTimer = 0;
+    this.spawnInterval = WAVE_CONFIG.baseInterval;
+    this.spawnRateMult = 1;
+  }
+
+  // Force-spawn a realm boss, evicting far trash if at cap
+  forceSpawnBoss(typeKey, player, camera, effectiveMinutes, realmIndex) {
+    // Make room if at cap by removing farthest basic enemy
+    if (!this._hasCapacity(1)) {
+      let farthestIdx = -1, farthestD = 0;
+      for (let i = 0; i < this.enemies.length; i++) {
+        const e = this.enemies[i];
+        if (e.tier === 'boss' || e.tier === 'miniboss') continue;
+        const d = Math.hypot(e.x - player.x, e.y - player.y);
+        if (d > farthestD) { farthestD = d; farthestIdx = i; }
+      }
+      if (farthestIdx >= 0) this.enemies.splice(farthestIdx, 1);
+    }
+
+    const base = ENEMY_TYPES[typeKey];
+    if (!base) return -1;
+    const scaled = scaleRealmBoss(base, effectiveMinutes, realmIndex);
+    const margin = 200;
+    const angle = Math.random() * Math.PI * 2;
+    const id = _nextEnemyId++;
+
+    this.enemies.push({
+      id,
+      type: typeKey,
+      ...scaled,
+      maxHp: scaled.hp,
+      x: player.x + Math.cos(angle) * margin,
+      y: player.y + Math.sin(angle) * margin,
+      hitFlash: 0,
+      slowTimer: 0,
+      teleport: base.teleport || false,
+      glow: true,
+      mechanics: base.mechanics || null,
+      tier: 'boss',
+      _chargeTimer: 0,
+      _summonTimer: 0,
+    });
+
+    return id;
+  }
+
+  // Remove all non-boss enemies (for realm transitions)
+  despawnAll() {
+    this.enemies.length = 0;
+  }
+
+  // Force-spawn a surge burst
+  triggerSurgeBurst(player, camera, realmElapsed, effectiveMinutes) {
+    const count = Math.min(8, 4 + Math.floor(realmElapsed / 90));
     for (let i = 0; i < count; i++) {
-      const typeKey = elapsed > WAVE_CONFIG.eliteStartTime && i === 0 ? 'ravager' : 'crawler';
-      this._spawnEnemy(typeKey, player, camera, elapsedMinutes, i, count);
+      const typeKey = realmElapsed > WAVE_CONFIG.eliteStartTime && i === 0 ? 'ravager' : 'crawler';
+      this._spawnEnemy(typeKey, player, camera, effectiveMinutes, i, count);
     }
   }
 }

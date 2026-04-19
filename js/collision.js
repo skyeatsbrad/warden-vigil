@@ -1,7 +1,7 @@
 // ── Collision & damage ──
 
-import { dist } from './utils.js?v=4';
-import { COLORS } from './data/colors.js?v=4';
+import { dist } from './utils.js?v=5';
+import { COLORS } from './data/colors.js?v=5';
 
 export function processCollisions(player, enemies, particles, camera, grid) {
   // Use grid to check only nearby enemies instead of scanning all

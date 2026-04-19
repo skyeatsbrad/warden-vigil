@@ -1,19 +1,20 @@
 // ── Game state manager ──
 
-import { Player } from './player.js?v=4';
-import { Companion, processOrbitDamage } from './companion.js?v=4';
-import { EnemySystem } from './enemy.js?v=4';
-import { ProjectileSystem } from './projectile.js?v=4';
-import { XPSystem } from './xp.js?v=4';
-import { Particles } from './particles.js?v=4';
-import { Camera } from './camera.js?v=4';
-import { UI } from './ui.js?v=4';
-import { Progression } from './progression.js?v=4';
-import { processCollisions, handleProjectileHit } from './collision.js?v=4';
-import { SpatialGrid } from './spatial-grid.js?v=4';
-import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel } from './data/companions.js?v=4';
-import { COLORS } from './data/colors.js?v=4';
-import { formatTime, dist, weightedPick } from './utils.js?v=4';
+import { Player } from './player.js?v=5';
+import { Companion, processOrbitDamage } from './companion.js?v=5';
+import { EnemySystem } from './enemy.js?v=5';
+import { ProjectileSystem } from './projectile.js?v=5';
+import { XPSystem } from './xp.js?v=5';
+import { Particles } from './particles.js?v=5';
+import { Camera } from './camera.js?v=5';
+import { UI } from './ui.js?v=5';
+import { Progression } from './progression.js?v=5';
+import { processCollisions, handleProjectileHit } from './collision.js?v=5';
+import { SpatialGrid } from './spatial-grid.js?v=5';
+import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel } from './data/companions.js?v=5';
+import { COLORS } from './data/colors.js?v=5';
+import { REALM_CONFIG } from './data/enemies.js?v=5';
+import { formatTime, dist, weightedPick } from './utils.js?v=5';
 
 export class Game {
   constructor(canvas, input) {
@@ -177,6 +178,7 @@ export class Game {
     this.player = new Player(0, 0);
     this.companions = [];
     this.enemySystem.clear();
+    this.enemySystem.realmIndex = 0;
     this.projectiles.clear();
     this.xpSystem.clear();
     this.pickups = [];
@@ -212,6 +214,14 @@ export class Game {
     this.ui._pickedTradeoffs = new Set();
     this.camera.reset(0, 0);
 
+    // Realm loop state
+    this._realmIndex = 0;
+    this._realmElapsed = 0;
+    this._realmState = 'active'; // active | boss | portal
+    this._realmBossId = -1;
+    this._portalTimer = 0;
+    this._portalRingT = 0;
+
     // Spawn starting companion
     const starter = new Companion(this.selectedStarter, this.player);
     this.companions.push(starter);
@@ -226,7 +236,12 @@ export class Game {
     this.particles.pressure = pressure;
 
     this.elapsed += dt;
+    this._realmElapsed += dt;
     this.input.update();
+
+    // Compute realm-aware scaling
+    const ri = Math.min(this._realmIndex, REALM_CONFIG.maxRealms - 1);
+    const effectiveMinutes = this._realmElapsed / 60 + ri * REALM_CONFIG.scalingOffset;
 
     // Player
     this.player.update(dt, this.input.dir);
@@ -269,24 +284,46 @@ export class Game {
     // Orbit damage
     processOrbitDamage(this.companions, this.enemySystem.enemies, this.particles, dt, grid);
 
-    // ── Surge / pressure spike system ──
-    this._surgeTimer += dt;
-    if (!this._surgeActive && this._surgeTimer >= 90) {
-      // Trigger surge
-      this._surgeActive = true;
-      this._surgeRemaining = 15;
-      this._surgeCount++;
-      this._surgeTimer = 0;
-      this._surgeWarningShown = true;
-      this._surgeWarningTime = 2.0;
-      this.enemySystem.triggerSurgeBurst(this.player, this.camera, this.elapsed);
-      this.particles.text(this.player.x, this.player.y - 40, '⚠ SURGE!', '#ff4444', 20);
-      this.camera.applyShake();
+    // ── Realm state machine ──
+    if (this._realmState === 'active') {
+      if (this._realmElapsed >= REALM_CONFIG.realmDuration) {
+        // Spawn realm boss
+        const bossType = REALM_CONFIG.bossTypes[ri] || 'voidlord';
+        this._realmBossId = this.enemySystem.forceSpawnBoss(
+          bossType, this.player, this.camera, effectiveMinutes, this._realmIndex
+        );
+        this._realmState = 'boss';
+        this.particles.text(this.player.x, this.player.y - 50, `⚠ REALM BOSS!`, '#ff2222', 22);
+        this.camera.applyShake();
+        this.enemySystem.spawnRateMult = REALM_CONFIG.spawnPauseDuringBoss;
+      }
+    } else if (this._realmState === 'portal') {
+      this._portalTimer -= dt;
+      this._portalRingT += dt;
+      if (this._portalTimer <= 0) {
+        this._advanceRealm();
+      }
+    }
+    // Boss death is detected below in the enemy removal loop
+
+    // ── Surge / pressure spike system (paused during boss/portal) ──
+    if (this._realmState === 'active') {
+      this._surgeTimer += dt;
+      if (!this._surgeActive && this._surgeTimer >= 90) {
+        this._surgeActive = true;
+        this._surgeRemaining = 15;
+        this._surgeCount++;
+        this._surgeTimer = 0;
+        this._surgeWarningShown = true;
+        this._surgeWarningTime = 2.0;
+        this.enemySystem.triggerSurgeBurst(this.player, this.camera, this._realmElapsed, effectiveMinutes);
+        this.particles.text(this.player.x, this.player.y - 40, '⚠ SURGE!', '#ff4444', 20);
+        this.camera.applyShake();
+      }
     }
     if (this._surgeActive) {
       this._surgeRemaining -= dt;
-      // Faster spawning during surge: extra spawn ticks
-      this.enemySystem.spawnTimer -= dt; // double speed: normal dt + this extra dt
+      this.enemySystem.spawnTimer -= dt;
       if (this._surgeRemaining <= 0) {
         this._surgeActive = false;
         this._surgesCompleted++;
@@ -323,7 +360,7 @@ export class Game {
     }
 
     // Enemies
-    this.enemySystem.update(dt, this.elapsed, this.player, this.camera, grid);
+    this.enemySystem.update(dt, this._realmElapsed, effectiveMinutes, this.player, this.camera, grid);
 
     // Projectiles — track damage for source companions
     this.projectiles.update(dt, this.enemySystem.enemies, this.particles, (enemy, proj) => {
@@ -413,6 +450,17 @@ export class Game {
           this.particles.emit(e.x, e.y, 12, '#ff4444', { speedMax: 130, life: 0.4 });
         }
 
+        // Realm boss death → trigger portal
+        if (e.id === this._realmBossId && this._realmState === 'boss') {
+          this._realmState = 'portal';
+          this._portalTimer = REALM_CONFIG.portalDuration;
+          this._portalRingT = 0;
+          this.enemySystem.spawnRateMult = 0; // stop spawning during portal
+          this.particles.text(this.player.x, this.player.y - 50,
+            `REALM ${this._realmIndex + 1} CLEARED!`, '#ffd700', 22);
+          this.camera.applyShake();
+        }
+
         this.enemySystem.enemies.splice(i, 1);
       }
     }
@@ -442,7 +490,7 @@ export class Game {
     this.particles.update(dt);
 
     // Update HUD
-    this.ui.updateHUD(this.player, this.elapsed);
+    this.ui.updateHUD(this.player, this.elapsed, this._realmIndex);
 
     // Check death
     if (!this.player.alive) {
@@ -547,6 +595,11 @@ export class Game {
 
     // Ultimate bloom overlay
     this._drawUltBloom(ctx);
+
+    // Portal ring during realm transition
+    if (this._realmState === 'portal') {
+      this._drawPortalRing(ctx, cam);
+    }
 
     // Ultimate cooldown indicator
     if (this.state === 'playing') {
@@ -984,6 +1037,35 @@ export class Game {
     ctx.stroke();
   }
 
+  _drawPortalRing(ctx, cam) {
+    const frac = this._portalRingT / REALM_CONFIG.portalDuration;
+    const pulse = 0.5 + 0.5 * Math.sin(this._portalRingT * 6);
+    const radius = 60 + 20 * pulse;
+    const sx = cam.screenX(this.player.x);
+    const sy = cam.screenY(this.player.y);
+
+    // Outer ring
+    ctx.beginPath();
+    ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(0,255,200,${0.4 + 0.3 * pulse})`;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Inner glow
+    ctx.beginPath();
+    ctx.arc(sx, sy, radius * 0.6, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(0,255,200,${0.08 + 0.05 * pulse})`;
+    ctx.fill();
+
+    // Realm label
+    ctx.save();
+    ctx.fillStyle = `rgba(255,255,255,${0.6 + 0.3 * pulse})`;
+    ctx.font = 'bold 16px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`REALM ${this._realmIndex + 2}`, sx, sy - radius - 10);
+    ctx.restore();
+  }
+
   _drawDeathRings(ctx, cam) {
     for (const ring of this._deathRings) {
       const frac = ring.t / ring.maxT;
@@ -1203,6 +1285,7 @@ export class Game {
       Time survived: <strong>${formatTime(this.elapsed)}</strong><br>
       Level reached: <strong>${this.player.level}</strong><br>
       Enemies slain: <strong>${this.player.kills}</strong><br>
+      Realms reached: <strong>${this._realmIndex + 1}</strong><br>
       Total damage: <strong>${Math.round(this._totalDamageDealt).toLocaleString()}</strong><br>
       Top source: <strong>${topName}</strong><br>
       Surges survived: <strong>${this._surgesCompleted}/${this._surgeCount}</strong><br>
@@ -1219,6 +1302,31 @@ export class Game {
       </div>
     `;
     document.getElementById('gameover-screen').classList.remove('hidden');
+  }
+
+  _advanceRealm() {
+    this._realmIndex++;
+    this._realmElapsed = 0;
+    this._realmState = 'active';
+    this._realmBossId = -1;
+
+    // Reset surge for new realm
+    this._surgeTimer = 0;
+    this._surgeActive = false;
+    this._surgeRemaining = 0;
+
+    // Clear enemies and reset spawn pacing
+    this.enemySystem.despawnAll();
+    this.enemySystem.resetForRealm();
+    this.enemySystem.realmIndex = this._realmIndex;
+
+    // Apply realm-based spawn interval compression
+    const ri = Math.min(this._realmIndex, REALM_CONFIG.maxRealms - 1);
+    this.enemySystem.spawnInterval *= Math.pow(REALM_CONFIG.intervalPerRealm, ri);
+
+    this.particles.text(this.player.x, this.player.y - 50,
+      `REALM ${this._realmIndex + 1}`, '#00ffcc', 24);
+    this.camera.applyShake();
   }
 
   _computeBuildLabel() {
