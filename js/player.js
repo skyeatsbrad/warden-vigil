@@ -1,6 +1,6 @@
 // ── Player (Warden) ──
 
-import { COLORS, GLOW } from './data/colors.js?v=10';
+import { COLORS, GLOW } from './data/colors.js?v=11';
 
 export class Player {
   constructor(x, y) {
@@ -91,26 +91,62 @@ export class Player {
     if (flicker) return;
 
     const cy = sy + bob;
+    const t = this._bobPhase; // reuse as time source (increments ~5/s)
 
-    // Magnet ring
+    // Breathing pulse — subtle size oscillation
+    const breathe = 1 + Math.sin(t * 0.7) * 0.03;
+    const r = this.radius * breathe;
+
+    // ── Magnet ring (faint, always visible) ──
     ctx.beginPath();
     ctx.arc(sx, cy, this.magnetRadius, 0, Math.PI * 2);
     ctx.strokeStyle = COLORS.playerMagnet;
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Breathing pulse — subtle size oscillation
-    const breathe = 1 + Math.sin(this._bobPhase * 0.7) * 0.03;
-    const r = this.radius * breathe;
-
-    // Outer halo (readability ring)
-    ctx.beginPath();
-    ctx.arc(sx, cy, r + 4, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(126,200,227,0.25)';
+    // ── Rotating outer ring (dashed arc) ──
+    const ringR = r + 6;
+    const ringAngle = t * 0.8; // slow rotation
+    const arcLen = 1.2; // radians per dash segment
+    const gaps = 3;
     ctx.lineWidth = 1.5;
-    ctx.stroke();
+    ctx.strokeStyle = 'rgba(126,200,227,0.35)';
+    for (let i = 0; i < gaps; i++) {
+      const a0 = ringAngle + (Math.PI * 2 / gaps) * i;
+      ctx.beginPath();
+      ctx.arc(sx, cy, ringR, a0, a0 + arcLen);
+      ctx.stroke();
+    }
 
-    // Main body — bright white/cyan
+    // ── Orbiting shard (diamond shape, 2 shards opposite) ──
+    const shardOrbitR = r + 10;
+    const shardAngle = t * 1.5;
+    for (let s = 0; s < 2; s++) {
+      const sa = shardAngle + Math.PI * s;
+      const shX = sx + Math.cos(sa) * shardOrbitR;
+      const shY = cy + Math.sin(sa) * shardOrbitR;
+      const shR = 3;
+      // Diamond shape: 4 points
+      ctx.beginPath();
+      ctx.moveTo(shX, shY - shR);
+      ctx.lineTo(shX + shR * 0.6, shY);
+      ctx.lineTo(shX, shY + shR);
+      ctx.lineTo(shX - shR * 0.6, shY);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(126,200,227,0.6)';
+      ctx.fill();
+    }
+
+    // ── Additive glow pass (drawn first, behind core) ──
+    ctx.beginPath();
+    ctx.arc(sx, cy, r + 3, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(126,200,227,0.12)';
+    ctx.shadowColor = COLORS.playerGlow;
+    ctx.shadowBlur = GLOW.player + 4;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // ── Core body — bright white-cyan ──
     ctx.beginPath();
     ctx.arc(sx, cy, r, 0, Math.PI * 2);
     ctx.fillStyle = this.color;
@@ -119,7 +155,7 @@ export class Player {
     ctx.fill();
     ctx.shadowBlur = 0;
 
-    // Facing dot
+    // ── Facing dot ──
     const dx = Math.cos(this.facingAngle) * r * 1.1;
     const dy = Math.sin(this.facingAngle) * r * 1.1;
     ctx.beginPath();
@@ -127,10 +163,10 @@ export class Player {
     ctx.fillStyle = '#fff';
     ctx.fill();
 
-    // Inner highlight
+    // ── Inner highlight (specular) ──
     ctx.beginPath();
-    ctx.arc(sx, cy - 2, 4, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.arc(sx - 2, cy - 3, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
     ctx.fill();
   }
 }
