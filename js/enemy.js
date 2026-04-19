@@ -10,6 +10,9 @@ const ENEMY_SPRITE_MAP = {
   drifter:  'enemy_spike_a',
 };
 
+// Fixed sprite draw size (px) — decoupled from collision radius
+const ENEMY_SPRITE_SIZE = 32;
+
 let _nextEnemyId = 0;
 
 export class EnemySystem {
@@ -505,8 +508,7 @@ export class EnemySystem {
       } else if (e.tier !== 'boss') {
         // Try sprite for basic/elite enemies
         const spriteKey = ENEMY_SPRITE_MAP[e.type];
-        const size = e.radius * 2.0;
-        if (!spriteKey || !sprites?.drawSprite(ctx, spriteKey, sx, sy, size, size)) {
+        if (!spriteKey || !sprites?.drawSprite(ctx, spriteKey, sx, sy, ENEMY_SPRITE_SIZE, ENEMY_SPRITE_SIZE)) {
           // Canvas fallback
           ctx.beginPath();
           ctx.arc(sx, sy, e.radius, 0, Math.PI * 2);
