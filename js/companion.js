@@ -1,8 +1,8 @@
 // ── Companion system ──
 
-import { COMPANION_DEFS, getCompanionStats, MODIFIERS, EVOLUTIONS } from './data/companions.js?v=13';
-import { dist, angle } from './utils.js?v=13';
-import { GLOW, TRAIL } from './data/colors.js?v=13';
+import { COMPANION_DEFS, getCompanionStats, MODIFIERS, EVOLUTIONS } from './data/companions.js?v=16';
+import { dist, angle } from './utils.js?v=16';
+import { GLOW, TRAIL } from './data/colors.js?v=16';
 
 const ORBIT_TRAIL_LEN = TRAIL.orbitLen;
 
