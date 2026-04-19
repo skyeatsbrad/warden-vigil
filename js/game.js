@@ -1,20 +1,20 @@
 // ── Game state manager ──
 
-import { Player } from './player.js?v=8';
-import { Companion, processOrbitDamage } from './companion.js?v=8';
-import { EnemySystem } from './enemy.js?v=8';
-import { ProjectileSystem } from './projectile.js?v=8';
-import { XPSystem } from './xp.js?v=8';
-import { Particles } from './particles.js?v=8';
-import { Camera } from './camera.js?v=8';
-import { UI } from './ui.js?v=8';
-import { Progression } from './progression.js?v=8';
-import { processCollisions, handleProjectileHit } from './collision.js?v=8';
-import { SpatialGrid } from './spatial-grid.js?v=8';
-import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue } from './data/companions.js?v=8';
-import { COLORS } from './data/colors.js?v=8';
-import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=8';
-import { formatTime, dist, weightedPick } from './utils.js?v=8';
+import { Player } from './player.js?v=9';
+import { Companion, processOrbitDamage } from './companion.js?v=9';
+import { EnemySystem } from './enemy.js?v=9';
+import { ProjectileSystem } from './projectile.js?v=9';
+import { XPSystem } from './xp.js?v=9';
+import { Particles } from './particles.js?v=9';
+import { Camera } from './camera.js?v=9';
+import { UI } from './ui.js?v=9';
+import { Progression } from './progression.js?v=9';
+import { processCollisions, handleProjectileHit } from './collision.js?v=9';
+import { SpatialGrid } from './spatial-grid.js?v=9';
+import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue } from './data/companions.js?v=9';
+import { COLORS } from './data/colors.js?v=9';
+import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=9';
+import { formatTime, dist, weightedPick } from './utils.js?v=9';
 
 export class Game {
   constructor(canvas, input) {

@@ -1,8 +1,8 @@
 // ── Enemy spawning + AI ──
 
-import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy, scaleRealmBoss, REALM_CONFIG, REALM_DEFS, BOSS_TUNING } from './data/enemies.js?v=8';
-import { weightedPick } from './utils.js?v=8';
-import { GLOW } from './data/colors.js?v=8';
+import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy, scaleRealmBoss, REALM_CONFIG, REALM_DEFS, BOSS_TUNING } from './data/enemies.js?v=9';
+import { weightedPick } from './utils.js?v=9';
+import { GLOW } from './data/colors.js?v=9';
 
 let _nextEnemyId = 0;
 
@@ -147,7 +147,7 @@ export class EnemySystem {
     const vals = keys.map(k => weights[k]);
 
     const ri = Math.min(this.realmIndex, REALM_DEFS.length - 1);
-    let count = 2 + Math.floor(realmElapsed / 35) + ri * REALM_CONFIG.waveSizePerRealm;
+    let count = 2 + Math.floor(realmElapsed / 35) + Math.floor(ri * REALM_CONFIG.waveSizePerRealm);
 
     if (realmElapsed > 120) {
       count += Math.floor((realmElapsed - 120) / 60);

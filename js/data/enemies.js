@@ -126,22 +126,22 @@ export const ENEMY_TYPES = {
 export const WAVE_CONFIG = {
   baseInterval: 4.2,       // seconds between spawn waves
   minInterval: 0.85,
-  spawnRateDecay: 0.986,
-  hpScale: 0.085,          // +8.5% hp per minute
-  damageScale: 0.04,       // +4% damage per minute
+  spawnRateDecay: 0.988,   // slightly slower convergence to floor
+  hpScale: 0.095,          // +9.5% hp per effective minute
+  damageScale: 0.048,      // +4.8% damage per effective minute
   maxEnemies: 220,
-  eliteStartTime: 100,     // seconds
+  eliteStartTime: 90,      // seconds — elites appear slightly sooner in R1
 };
 
 // Realm loop configuration — shared defaults
 export const REALM_CONFIG = {
   portalDuration: 4,          // seconds portal lingers before auto-advancing
-  scalingOffset: 1.5,         // "virtual minutes" added per realm for stat scaling
+  scalingOffset: 2.0,         // "virtual minutes" added per realm for stat scaling
   bossHpPerRealm: 1.4,        // boss HP multiplier per realm (compound)
   bossDmgPerRealm: 1.2,       // boss damage multiplier per realm
-  waveSizePerRealm: 1,        // extra enemies per wave per realm
+  waveSizePerRealm: 1.15,     // extra enemies per wave per realm (modest ramp)
   intervalPerRealm: 0.92,     // spawn interval multiplier per realm (compounds)
-  bossSpawnMult: 0.65,        // spawn rate multiplier while realm boss alive (~35% reduction)
+  bossSpawnMult: 0.55,        // spawn rate multiplier while realm boss alive (~45% reduction)
   bossEnemyCap: 150,          // reduced enemy cap during boss fight
 };
 
@@ -179,38 +179,38 @@ export const BOSS_TUNING = {
 export const REALM_DEFS = [
   {
     name: 'The Outskirts',
-    duration: 120,
+    duration: 140,
     bossType: 'siegebreaker',
-    tint: '#1a1a2e',       // subtle background tint (unused for now, placeholder)
-    eliteStartTime: 100,   // seconds into realm before elites can spawn
+    tint: '#1a1a2e',
+    eliteStartTime: 90,
   },
   {
     name: 'The Hollows',
-    duration: 110,
+    duration: 125,
     bossType: 'voidweaver',
     tint: '#1e0a2e',
-    eliteStartTime: 70,
+    eliteStartTime: 65,
   },
   {
     name: 'The Abyss',
-    duration: 100,
+    duration: 115,
     bossType: 'dreadmaw',
     tint: '#2e0a0a',
-    eliteStartTime: 45,
+    eliteStartTime: 40,
   },
   {
     name: 'The Crucible',
-    duration: 90,
+    duration: 105,
     bossType: 'voidlord',
     tint: '#2e1a00',
-    eliteStartTime: 30,
+    eliteStartTime: 25,
   },
   {
     name: 'The Endless',
-    duration: 90,
+    duration: 100,
     bossType: 'voidlord',
     tint: '#0a0a0a',
-    eliteStartTime: 20,
+    eliteStartTime: 15,
   },
 ];
 

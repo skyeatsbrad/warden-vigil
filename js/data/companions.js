@@ -448,13 +448,13 @@ export const MASTERY_DEFS = [
     id: 'mastery_heal', icon: '✚', title: 'Mastery: Siphon',
     desc: 'Heal {n} HP per XP orb (Rank {r})',
     stat: 'healOnPickup', baseValue: 1, mode: 'linear',
-    maxPicks: 5,
+    maxPicks: 4,
   },
   {
     id: 'mastery_xp', icon: '★', title: 'Mastery: Insight',
     desc: '+{n}% XP gain (Rank {r})',
-    stat: 'xpMult', baseValue: 0.08, mode: 'diminish',
-    maxPicks: 6,
+    stat: 'xpMult', baseValue: 0.06, mode: 'diminish',
+    maxPicks: 4,
   },
   {
     id: 'mastery_range', icon: '◎', title: 'Mastery: Reach',
