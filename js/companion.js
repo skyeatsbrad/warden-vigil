@@ -420,23 +420,29 @@ export class Companion {
       // Telegraph: expanding ring before damage
       ctx.beginPath();
       ctx.arc(sx, sy, pulseR, 0, Math.PI * 2);
-      ctx.strokeStyle = color + Math.floor(remaining * 80).toString(16).padStart(2, '0');
+      ctx.strokeStyle = color;
       ctx.lineWidth = 2;
+      ctx.globalAlpha = remaining * 0.3;
       ctx.stroke();
+      ctx.globalAlpha = 1;
       // Faint fill for area telegraph
       ctx.beginPath();
       ctx.arc(sx, sy, pulseR, 0, Math.PI * 2);
-      ctx.fillStyle = color + '08';
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.03;
       ctx.fill();
+      ctx.globalAlpha = 1;
     }
 
     // Aura-type companion: persistent faint range circle
     if (this.def.attack === 'aura') {
       ctx.beginPath();
       ctx.arc(sx, sy, this.stats.range, 0, Math.PI * 2);
-      ctx.strokeStyle = color + '18';
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.09;
       ctx.lineWidth = 1;
       ctx.stroke();
+      ctx.globalAlpha = 1;
     }
   }
 
@@ -449,25 +455,46 @@ export class Companion {
     const icon = this.evolutionDef ? this.evolutionDef.icon : this.def.icon;
     const color = this.color;
 
-    // ── Orbit trail arc (behind body) ──
+    // ── Orbit trail (fading line, not per-point arcs) ──
     if (this.def.behavior === 'orbit' && this._orbitTrailFill >= 2) {
       const len = this._orbitTrailFill;
-      for (let j = 0; j < len; j++) {
-        const idx = ((this._orbitTrailIdx - len + j + ORBIT_TRAIL_LEN) % ORBIT_TRAIL_LEN) * 2;
-        const tx = this._orbitTrail[idx];
-        const ty = this._orbitTrail[idx + 1];
-        const frac = j / len;
-        const alpha = frac * 0.35;
-        const r = this.stats.radius * (0.2 + frac * 0.4);
 
-        ctx.globalAlpha = alpha;
-        ctx.beginPath();
-        ctx.arc(camera.screenX(tx), camera.screenY(ty), r, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
+      // Outer glow trail line (wider, dimmer)
+      ctx.beginPath();
+      const firstIdx = ((this._orbitTrailIdx - len + ORBIT_TRAIL_LEN) % ORBIT_TRAIL_LEN) * 2;
+      ctx.moveTo(camera.screenX(this._orbitTrail[firstIdx]), camera.screenY(this._orbitTrail[firstIdx + 1]));
+      for (let j = 1; j < len; j++) {
+        const idx = ((this._orbitTrailIdx - len + j + ORBIT_TRAIL_LEN) % ORBIT_TRAIL_LEN) * 2;
+        ctx.lineTo(camera.screenX(this._orbitTrail[idx]), camera.screenY(this._orbitTrail[idx + 1]));
       }
+      ctx.lineTo(sx, sy);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = this.stats.radius * 0.8;
+      ctx.lineCap = 'round';
+      ctx.globalAlpha = 0.12;
+      ctx.stroke();
+
+      // Inner bright trail line (thinner, brighter)
+      ctx.globalAlpha = 0.3;
+      ctx.lineWidth = Math.max(1, this.stats.radius * 0.3);
+      ctx.stroke(); // reuse same path
       ctx.globalAlpha = 1;
+      ctx.lineCap = 'butt';
     }
+
+    // ── Rotating accent ring ──
+    const ringAngle = this._phase + performance.now() * 0.002;
+    const ringR = this.stats.radius + 4;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.3;
+    ctx.beginPath();
+    ctx.arc(sx, sy, ringR, ringAngle, ringAngle + 2.0);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(sx, sy, ringR, ringAngle + Math.PI, ringAngle + Math.PI + 2.0);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
 
     // Body glow
     ctx.beginPath();
