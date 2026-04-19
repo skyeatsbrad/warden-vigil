@@ -274,6 +274,9 @@ export class ProjectileSystem {
               cp.chainFromY = enemy.y;
               // Copy parent hitIds so chain doesn't re-hit
               for (const id of p.hitIds) cp.hitIds.add(id);
+
+              // Spawn chain lightning arc visual
+              particles.spawnChain(enemy.x, enemy.y, nextTarget.x, nextTarget.y, p.color);
             }
           }
         }
@@ -325,39 +328,6 @@ export class ProjectileSystem {
   }
 
   draw(ctx, camera) {
-    // ── Chain lightning lines (jagged, flickering) ──
-    for (let i = 0; i < this.count; i++) {
-      const p = this.pool[i];
-      if (!p.isChainBounce) continue;
-      if (!camera.isVisible(p.x, p.y, 60)) continue;
-      if (p.age > 0.15) continue;
-
-      const sx = camera.screenX(p.chainFromX);
-      const sy = camera.screenY(p.chainFromY);
-      const ex = camera.screenX(p.x);
-      const ey = camera.screenY(p.y);
-
-      const dx = ex - sx, dy = ey - sy;
-      const segs = 3;
-      ctx.strokeStyle = p.color;
-      ctx.lineWidth = 2;
-      ctx.shadowColor = p.color;
-      ctx.shadowBlur = GLOW.projectile;
-      ctx.globalAlpha = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(sx, sy);
-      for (let s = 1; s < segs; s++) {
-        const t = s / segs;
-        const jx = (Math.random() - 0.5) * 12;
-        const jy = (Math.random() - 0.5) * 12;
-        ctx.lineTo(sx + dx * t + jx, sy + dy * t + jy);
-      }
-      ctx.lineTo(ex, ey);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      ctx.globalAlpha = 1;
-    }
-
     // ── Trail streaks (line from oldest trail point to head) ──
     ctx.lineCap = 'round';
     for (let i = 0; i < this.count; i++) {

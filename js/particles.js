@@ -5,6 +5,8 @@
 
 const POOL_SIZE = 500;
 const IMPACT_POOL_SIZE = 30;
+const CHAIN_POOL_SIZE = 24;
+const CHAIN_MAX_SEGS = 6;  // max jitter midpoints per arc
 
 function _createParticle() {
   return {
@@ -18,6 +20,19 @@ function _createImpact() {
   return {
     x: 0, y: 0, color: '',
     t: 0, maxT: 0, maxR: 0,
+    active: false,
+  };
+}
+
+function _createChain() {
+  return {
+    sx: 0, sy: 0, ex: 0, ey: 0,
+    color: '',
+    t: 0, maxT: 0,
+    segs: 0,
+    // Pre-rolled jitter offsets (stable across frames)
+    jx: new Float32Array(CHAIN_MAX_SEGS),
+    jy: new Float32Array(CHAIN_MAX_SEGS),
     active: false,
   };
 }
@@ -37,6 +52,13 @@ export class Particles {
       this.impacts[i] = _createImpact();
     }
     this.impactCount = 0;
+
+    // Chain lightning arc pool (jagged line segments between two points)
+    this.chains = new Array(CHAIN_POOL_SIZE);
+    for (let i = 0; i < CHAIN_POOL_SIZE; i++) {
+      this.chains[i] = _createChain();
+    }
+    this.chainCount = 0;
   }
 
   _acquire() {
@@ -190,6 +212,51 @@ export class Particles {
     }
   }
 
+  // ── Chain lightning arc: jagged line between two points ──
+  // Pre-rolls jitter on spawn so the arc is stable (not flickering).
+  // Fades out over lifetime. Optional endpoint sparks via particle pool.
+  spawnChain(sx, sy, ex, ey, color, opts = {}) {
+    const { lifetime = 0.18, jitter = 14, sparks = 2 } = opts;
+
+    if (this.chainCount < CHAIN_POOL_SIZE) {
+      const c = this.chains[this.chainCount++];
+      c.sx = sx; c.sy = sy;
+      c.ex = ex; c.ey = ey;
+      c.color = color;
+      c.t = 0;
+      c.maxT = lifetime;
+      c.active = true;
+
+      // Adaptive segment count based on distance
+      const d = Math.hypot(ex - sx, ey - sy);
+      c.segs = Math.min(CHAIN_MAX_SEGS, Math.max(3, Math.round(d / 30)));
+
+      // Pre-roll perpendicular jitter offsets
+      for (let i = 0; i < c.segs; i++) {
+        c.jx[i] = (Math.random() - 0.5) * jitter;
+        c.jy[i] = (Math.random() - 0.5) * jitter;
+      }
+    }
+
+    // Optional tiny sparks at endpoint
+    const budgeted = this._budgetCount(Math.min(sparks, 4));
+    for (let i = 0; i < budgeted; i++) {
+      const p = this._acquire();
+      if (!p) break;
+      const a = Math.random() * Math.PI * 2;
+      const spd = 40 + Math.random() * 40;
+      p.x = ex; p.y = ey;
+      p.vx = Math.cos(a) * spd;
+      p.vy = Math.sin(a) * spd;
+      p.life = lifetime * 0.7;
+      p.maxLife = lifetime * 0.7;
+      p.size = 1.5 + Math.random();
+      p.color = color;
+      p.gravity = 0;
+      p.text = null;
+    }
+  }
+
   update(dt) {
     // Update particles
     let i = 0;
@@ -224,10 +291,64 @@ export class Particles {
         j++;
       }
     }
+
+    // Update chain arcs (swap-and-pop)
+    let k = 0;
+    while (k < this.chainCount) {
+      const c = this.chains[k];
+      c.t += dt;
+      if (c.t >= c.maxT) {
+        c.active = false;
+        this.chainCount--;
+        if (k < this.chainCount) {
+          const tmp = this.chains[k];
+          this.chains[k] = this.chains[this.chainCount];
+          this.chains[this.chainCount] = tmp;
+        }
+      } else {
+        k++;
+      }
+    }
   }
 
   draw(ctx, camera) {
-    // ── Impact rings (drawn first, beneath particles) ──
+    // ── Chain arcs (drawn first, beneath everything) ──
+    for (let i = 0; i < this.chainCount; i++) {
+      const c = this.chains[i];
+      const frac = c.t / c.maxT;
+      const alpha = (1 - frac) * 0.85;
+
+      const x0 = camera.screenX(c.sx);
+      const y0 = camera.screenY(c.sy);
+      const x1 = camera.screenX(c.ex);
+      const y1 = camera.screenY(c.ey);
+
+      const dx = x1 - x0, dy = y1 - y0;
+      const segs = c.segs;
+
+      // Build jagged path once, stroke twice (glow + core)
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      for (let s = 1; s < segs; s++) {
+        const t = s / segs;
+        ctx.lineTo(x0 + dx * t + c.jx[s], y0 + dy * t + c.jy[s]);
+      }
+      ctx.lineTo(x1, y1);
+
+      // Outer glow pass
+      ctx.strokeStyle = c.color;
+      ctx.lineWidth = 4;
+      ctx.globalAlpha = alpha * 0.3;
+      ctx.stroke();
+
+      // Inner bright core
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = alpha;
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // ── Impact rings (drawn beneath particles) ──
     for (let i = 0; i < this.impactCount; i++) {
       const imp = this.impacts[i];
       if (!camera.isVisible(imp.x, imp.y, imp.maxR + 5)) continue;
