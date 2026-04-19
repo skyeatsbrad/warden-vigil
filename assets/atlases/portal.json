@@ -1,0 +1,7 @@
+{
+  "image": "portal.png",
+  "frames": {
+    "portal_outer_ring_a": { "x": 0,  "y": 0, "w": 64, "h": 64 },
+    "portal_inner_core_a": { "x": 66, "y": 0, "w": 64, "h": 64 }
+  }
+}

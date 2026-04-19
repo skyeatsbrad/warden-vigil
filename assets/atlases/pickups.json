@@ -1,0 +1,7 @@
+{
+  "image": "pickups.png",
+  "frames": {
+    "pickup_xp_small":   { "x": 0,  "y": 0, "w": 16, "h": 16 },
+    "pickup_heal_small": { "x": 18, "y": 0, "w": 16, "h": 16 }
+  }
+}

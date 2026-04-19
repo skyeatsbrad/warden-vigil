@@ -1,89 +1,80 @@
-// ── Placeholder sprite atlas generator ──
-// Run once in a browser console or as a module to generate placeholder PNG atlases.
-// Creates colored rectangles with labels so sprite integration can be tested
-// before real art is added. Output: downloads PNG files.
+// ── Placeholder sprite atlas generator (v2) ──
+// Generates placeholder PNGs matching assets/atlases/*.json metadata.
+// Run in browser console: import and call generatePlaceholders().
+// Downloads PNG files that match the atlas JSON frame layouts.
 //
-// Usage: import and call generatePlaceholders() or paste in browser console.
+// NOTE: For production use, replace the downloaded PNGs with real art.
+// The JSON metadata files are the source of truth for frame positions.
 
-export function generatePlaceholders() {
-  _gen('pickups', 16, 16, 4, 2, {
-    0: { color: '#2ecc71', label: '✚' },
-    1: { color: '#f39c12', label: '⚡' },
-    2: { color: '#9b59b6', label: '✦' },
-    3: { color: '#e74c3c', label: '★' },
-    4: { color: '#8e44ad', label: '◈' },
-    5: { color: '#ffd700', label: '🎁' },
-    6: { color: '#444', label: '' },
-    7: { color: '#444', label: '' },
-  });
-
-  _gen('enemies', 32, 32, 4, 4, {
-    0: { color: '#cc4444', label: 'R' },
-    1: { color: '#8844cc', label: 'B' },
-    2: { color: '#44cc44', label: 'S' },
-    3: { color: '#cccc44', label: 'W' },
-    4: { color: '#ff6666', label: 'R+' },
-    5: { color: '#aa66ff', label: 'B+' },
-    6: { color: '#66ff66', label: 'S+' },
-    7: { color: '#ffff66', label: 'W+' },
-  });
-
-  _gen('portal', 64, 64, 4, 1, {
-    0: { color: '#00ffc8', label: '0' },
-    1: { color: '#0088ff', label: '1' },
-    2: { color: '#aa44ff', label: '2' },
-    3: { color: '#00ffc8', label: '3' },
-  });
-
-  _gen('bosses', 48, 48, 3, 2, {
-    0: { color: '#cc2222', label: 'SB' },
-    1: { color: '#6a0dad', label: 'VW' },
-    2: { color: '#228b22', label: 'DM' },
-    3: { color: '#ff4444', label: 'SB!' },
-    4: { color: '#9b59b6', label: 'VW!' },
-    5: { color: '#44cc44', label: 'DM!' },
-  });
+export async function generatePlaceholders() {
+  const atlases = ['enemies', 'pickups', 'portal', 'bosses'];
+  for (const key of atlases) {
+    const resp = await fetch(`assets/atlases/${key}.json`);
+    const meta = await resp.json();
+    _genFromMeta(key, meta);
+  }
 }
 
-function _gen(name, fw, fh, cols, rows, frames) {
+const FRAME_COLORS = {
+  enemy_blob_a: '#c0392b',
+  enemy_spike_a: '#e67e22',
+  enemy_crawler_a: '#8e6f3e',
+  elite_ring_a: '#ffd700',
+  pickup_xp_small: '#2ecc71',
+  pickup_heal_small: '#27ae60',
+  portal_outer_ring_a: '#00ffc8',
+  portal_inner_core_a: '#0088ff',
+  boss_ashen_core_a: '#c0392b',
+  boss_ashen_node_a: '#8e44ad',
+  boss_ashen_weakpoint_a: '#f1c40f',
+};
+
+function _genFromMeta(name, meta) {
+  // Compute canvas size from frame positions
+  let maxX = 0, maxY = 0;
+  for (const f of Object.values(meta.frames)) {
+    maxX = Math.max(maxX, f.x + f.w);
+    maxY = Math.max(maxY, f.y + f.h);
+  }
+  maxX += 2; maxY += 2;
+
   const c = document.createElement('canvas');
-  c.width = cols * fw;
-  c.height = rows * fh;
+  c.width = maxX; c.height = maxY;
   const ctx = c.getContext('2d');
 
-  for (let i = 0; i < cols * rows; i++) {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    const x = col * fw;
-    const y = row * fh;
-    const f = frames[i] || { color: '#333', label: '' };
+  for (const [frameName, f] of Object.entries(meta.frames)) {
+    const color = FRAME_COLORS[frameName] || '#888';
+    const cx = f.x + f.w / 2;
+    const cy = f.y + f.h / 2;
+    const r = Math.min(f.w, f.h) / 2 - 2;
 
-    ctx.fillStyle = '#111';
-    ctx.fillRect(x, y, fw, fh);
-
-    ctx.beginPath();
-    ctx.arc(x + fw / 2, y + fh / 2, Math.min(fw, fh) * 0.38, 0, Math.PI * 2);
-    ctx.fillStyle = f.color;
-    ctx.fill();
-
-    ctx.strokeStyle = '#555';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 0.5, y + 0.5, fw - 1, fh - 1);
-
-    if (f.label) {
-      ctx.fillStyle = '#fff';
-      ctx.font = `bold ${Math.floor(Math.min(fw, fh) * 0.35)}px monospace`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(f.label, x + fw / 2, y + fh / 2);
+    ctx.fillStyle = color;
+    if (frameName.includes('ring')) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (frameName.includes('spike')) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - r);
+      ctx.lineTo(cx + r, cy);
+      ctx.lineTo(cx, cy + r);
+      ctx.lineTo(cx - r, cy);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 
+  // Download
   c.toBlob(blob => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `${name}.png`;
+    a.href = url; a.download = `${name}.png`;
     a.click();
     URL.revokeObjectURL(url);
   });

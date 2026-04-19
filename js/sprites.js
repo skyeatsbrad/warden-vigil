@@ -1,224 +1,142 @@
 // ── Sprite atlas loader and draw helper ──
-// Lightweight sprite pipeline: preloads PNG atlases, stores frame metadata,
-// exposes zero-allocation drawSprite() for hot render loops.
+// JSON-driven sprite pipeline: loads atlas metadata from JSON files,
+// preloads atlas images, exposes zero-allocation drawSprite() for hot paths.
 //
-// Atlas layout: uniform grid of equal-sized frames, left-to-right top-to-bottom.
-// Frame metadata is defined in ATLASES config, not embedded in image files.
+// Atlas metadata shape (JSON file per atlas):
+//   {
+//     "image": "enemies.png",
+//     "frames": {
+//       "enemy_blob_a":    { "x": 0, "y": 0, "w": 32, "h": 32 },
+//       "enemy_spike_a":   { "x": 34, "y": 0, "w": 32, "h": 32 },
+//       ...
+//     }
+//   }
 //
 // Usage:
 //   import { SpriteManager } from './sprites.js';
 //   const sprites = new SpriteManager();
 //   await sprites.load();
-//   sprites.draw(ctx, 'pickup_heal', sx, sy, 24, 24);  // centered at sx,sy
-//   sprites.drawFrame(ctx, 'enemies', 2, sx, sy, 32, 32);  // frame index
+//   sprites.drawSprite(ctx, 'enemies', 'enemy_blob_a', sx, sy, 28, 28, 0, 1);
 
-// ── Atlas definitions ──
-// Each atlas: { src, frameW, frameH, cols, rows, names? }
-// If 'names' is provided, frames are individually addressable by name.
-// Otherwise use drawFrame() with numeric index.
-const ATLASES = {
-  pickups: {
-    src: 'assets/sprites/pickups.png',
-    frameW: 16, frameH: 16,
-    cols: 4, rows: 2,
-    // Named frames map to grid index (left-to-right, top-to-bottom)
-    names: {
-      heal: 0,
-      frenzy_core: 1,
-      essence_surge: 2,
-      rare_token: 3,
-      void_burst: 4,
-      chest: 5,
-    },
-  },
-  enemies: {
-    src: 'assets/sprites/enemies.png',
-    frameW: 32, frameH: 32,
-    cols: 4, rows: 4,
-    // Named frames for enemy types — extend as sprites are added
-    names: {
-      runner: 0,
-      brute: 1,
-      spitter: 2,
-      swarm: 3,
-      // Row 2: elite overlays / variants
-      elite_runner: 4,
-      elite_brute: 5,
-      elite_spitter: 6,
-      elite_swarm: 7,
-    },
-  },
-  portal: {
-    src: 'assets/sprites/portal.png',
-    frameW: 64, frameH: 64,
-    cols: 4, rows: 1,
-    // Animation frames
-    names: {
-      frame0: 0,
-      frame1: 1,
-      frame2: 2,
-      frame3: 3,
-    },
-  },
-  bosses: {
-    src: 'assets/sprites/bosses.png',
-    frameW: 48, frameH: 48,
-    cols: 3, rows: 2,
-    names: {
-      siegebreaker: 0,
-      voidweaver: 1,
-      dreadmaw: 2,
-      // Row 2: attack/telegraph frames
-      siegebreaker_slam: 3,
-      voidweaver_cast: 4,
-      dreadmaw_charge: 5,
-    },
-  },
+// Cache version appended to all fetch/image URLs to bust browser cache
+const CACHE_V = 15;
+
+// Atlas manifest — maps atlas key to JSON metadata path.
+// Image path is resolved from the JSON's "image" field.
+const ATLAS_MANIFEST = {
+  enemies: `assets/atlases/enemies.json?v=${CACHE_V}`,
+  pickups: `assets/atlases/pickups.json?v=${CACHE_V}`,
+  portal:  `assets/atlases/portal.json?v=${CACHE_V}`,
+  bosses:  `assets/atlases/bosses.json?v=${CACHE_V}`,
 };
 
-// Pre-computed frame rectangles (filled once on load, never allocated at runtime)
-// Map<atlasKey, Map<nameOrIndex, {sx, sy, sw, sh}>>
-const _frameCache = {};
+// Pre-cached frame rects per atlas. Populated once on load.
+// Shape: { [atlasKey]: { [frameName]: { x, y, w, h } } }
+const _frames = {};
 
 export class SpriteManager {
   constructor() {
-    /** @type {Map<string, HTMLImageElement>} */
-    this.images = {};
+    /** @type {Object<string, HTMLImageElement>} */
+    this._images = {};
     this.ready = false;
-    this._fallback = true; // true until all atlases load successfully
   }
 
   /**
-   * Preload all atlas images. Returns a promise that resolves when done.
-   * On failure, sets _fallback = true so renderers can skip sprite calls.
+   * Preload all atlases (JSON metadata + PNG image).
+   * Non-blocking: renderers can fall back to canvas if load fails.
    */
   async load() {
-    const entries = Object.entries(ATLASES);
+    const keys = Object.keys(ATLAS_MANIFEST);
     const results = await Promise.allSettled(
-      entries.map(([key, def]) => this._loadImage(key, def))
+      keys.map(key => this._loadAtlas(key, ATLAS_MANIFEST[key]))
     );
 
     let allOk = true;
     for (let i = 0; i < results.length; i++) {
       if (results[i].status === 'rejected') {
-        console.warn(`[sprites] Failed to load atlas "${entries[i][0]}":`, results[i].reason);
+        console.warn(`[sprites] Atlas "${keys[i]}" failed:`, results[i].reason);
         allOk = false;
       }
     }
-
-    this._fallback = !allOk;
     this.ready = allOk;
     return allOk;
   }
 
-  _loadImage(key, def) {
-    return new Promise((resolve, reject) => {
+  async _loadAtlas(key, jsonUrl) {
+    const resp = await fetch(jsonUrl);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${jsonUrl}`);
+    const meta = await resp.json();
+
+    // Resolve image URL relative to the JSON file's directory
+    const base = jsonUrl.substring(0, jsonUrl.lastIndexOf('/') + 1);
+    const imgUrl = base + meta.image + `?v=${CACHE_V}`;
+
+    // Cache frame rects (plain object — zero per-draw overhead)
+    _frames[key] = meta.frames;
+
+    // Load the image
+    await new Promise((resolve, reject) => {
       const img = new Image();
-      img.onload = () => {
-        this.images[key] = img;
-        // Pre-compute frame rects
-        _frameCache[key] = {};
-        const total = def.cols * def.rows;
-        for (let i = 0; i < total; i++) {
-          const col = i % def.cols;
-          const row = Math.floor(i / def.cols);
-          _frameCache[key][i] = {
-            sx: col * def.frameW,
-            sy: row * def.frameH,
-            sw: def.frameW,
-            sh: def.frameH,
-          };
-        }
-        // Also map named frames to same rects
-        if (def.names) {
-          for (const [name, idx] of Object.entries(def.names)) {
-            _frameCache[key][name] = _frameCache[key][idx];
-          }
-        }
-        resolve();
-      };
-      img.onerror = () => reject(new Error(`Failed to load ${def.src}`));
-      img.src = def.src;
+      img.onload = () => { this._images[key] = img; resolve(); };
+      img.onerror = () => reject(new Error(`Image load failed: ${imgUrl}`));
+      img.src = imgUrl;
     });
   }
 
   /**
-   * Check if a specific atlas is loaded and has the given frame.
+   * Check if a specific atlas has a given frame loaded.
    */
   has(atlasKey, frameName) {
-    return !!(this.images[atlasKey] && _frameCache[atlasKey] && _frameCache[atlasKey][frameName]);
+    return !!(this._images[atlasKey] && _frames[atlasKey]?.[frameName]);
   }
 
   /**
-   * Draw a named sprite frame, centered at (dx, dy).
+   * Draw a sprite frame centered at (x, y).
+   * Optimized fast-path when rotation === 0 and alpha === 1.
+   *
    * @param {CanvasRenderingContext2D} ctx
-   * @param {string} atlasKey - e.g. 'pickups', 'enemies'
-   * @param {string|number} frame - frame name or index
-   * @param {number} dx - center x on canvas
-   * @param {number} dy - center y on canvas
-   * @param {number} dw - draw width
-   * @param {number} dh - draw height
+   * @param {string} atlas  - atlas key (e.g. 'enemies')
+   * @param {string} frame  - frame name (e.g. 'enemy_blob_a')
+   * @param {number} x      - center x on canvas
+   * @param {number} y      - center y on canvas
+   * @param {number} w      - draw width
+   * @param {number} h      - draw height
+   * @param {number} [rotation=0] - radians
+   * @param {number} [alpha=1]    - opacity (0–1)
+   * @returns {boolean} true if drawn, false if frame/atlas missing (use canvas fallback)
    */
-  draw(ctx, atlasKey, frame, dx, dy, dw, dh) {
-    const img = this.images[atlasKey];
-    const f = _frameCache[atlasKey]?.[frame];
+  drawSprite(ctx, atlas, frame, x, y, w, h, rotation, alpha) {
+    const img = this._images[atlas];
+    const f = _frames[atlas]?.[frame];
     if (!img || !f) return false;
 
-    ctx.drawImage(img, f.sx, f.sy, f.sw, f.sh, dx - dw * 0.5, dy - dh * 0.5, dw, dh);
-    return true;
-  }
+    // Fast path: no rotation, full opacity
+    if (!rotation && (alpha === undefined || alpha === 1)) {
+      ctx.drawImage(img, f.x, f.y, f.w, f.h, x - w * 0.5, y - h * 0.5, w, h);
+      return true;
+    }
 
-  /**
-   * Draw a sprite frame with rotation (radians), centered at (dx, dy).
-   * Uses save/restore — use sparingly in hot loops.
-   */
-  drawRotated(ctx, atlasKey, frame, dx, dy, dw, dh, angle) {
-    const img = this.images[atlasKey];
-    const f = _frameCache[atlasKey]?.[frame];
-    if (!img || !f) return false;
+    // Alpha-only path (no save/restore)
+    if (!rotation) {
+      const prev = ctx.globalAlpha;
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(img, f.x, f.y, f.w, f.h, x - w * 0.5, y - h * 0.5, w, h);
+      ctx.globalAlpha = prev;
+      return true;
+    }
 
+    // Full path: rotation (and optional alpha)
     ctx.save();
-    ctx.translate(dx, dy);
-    ctx.rotate(angle);
-    ctx.drawImage(img, f.sx, f.sy, f.sw, f.sh, -dw * 0.5, -dh * 0.5, dw, dh);
+    if (alpha !== undefined && alpha !== 1) ctx.globalAlpha = alpha;
+    ctx.translate(x, y);
+    ctx.rotate(rotation);
+    ctx.drawImage(img, f.x, f.y, f.w, f.h, -w * 0.5, -h * 0.5, w, h);
     ctx.restore();
     return true;
   }
 
   /**
-   * Draw a sprite with current globalAlpha (no save/restore overhead).
+   * Get all loaded atlas keys.
    */
-  drawAlpha(ctx, atlasKey, frame, dx, dy, dw, dh, alpha) {
-    const img = this.images[atlasKey];
-    const f = _frameCache[atlasKey]?.[frame];
-    if (!img || !f) return false;
-
-    const prev = ctx.globalAlpha;
-    ctx.globalAlpha = alpha;
-    ctx.drawImage(img, f.sx, f.sy, f.sw, f.sh, dx - dw * 0.5, dy - dh * 0.5, dw, dh);
-    ctx.globalAlpha = prev;
-    return true;
-  }
-
-  /**
-   * Get atlas config for extending frame definitions at runtime.
-   */
-  static getAtlasDef(key) {
-    return ATLASES[key] || null;
-  }
-
-  /**
-   * Register additional named frames for an atlas (e.g. after adding new enemy types).
-   */
-  static registerFrames(atlasKey, nameMap) {
-    const def = ATLASES[atlasKey];
-    if (!def) return;
-    if (!def.names) def.names = {};
-    for (const [name, idx] of Object.entries(nameMap)) {
-      def.names[name] = idx;
-      if (_frameCache[atlasKey]?.[idx]) {
-        _frameCache[atlasKey][name] = _frameCache[atlasKey][idx];
-      }
-    }
-  }
+  get atlasKeys() { return Object.keys(this._images); }
 }

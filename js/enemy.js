@@ -1,8 +1,15 @@
 // ── Enemy spawning + AI ──
 
-import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy, scaleRealmBoss, REALM_CONFIG, REALM_DEFS, BOSS_TUNING } from './data/enemies.js?v=13';
-import { weightedPick } from './utils.js?v=13';
-import { GLOW } from './data/colors.js?v=13';
+import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy, scaleRealmBoss, REALM_CONFIG, REALM_DEFS, BOSS_TUNING } from './data/enemies.js?v=15';
+import { weightedPick } from './utils.js?v=15';
+import { GLOW } from './data/colors.js?v=15';
+
+// Sprite frame mapping: game enemy type → atlas frame name
+const ENEMY_SPRITE_MAP = {
+  crawler:  'enemy_blob_a',
+  drifter:  'enemy_spike_a',
+  shambler: 'enemy_crawler_a',
+};
 
 let _nextEnemyId = 0;
 
@@ -436,7 +443,6 @@ export class EnemySystem {
 
   draw(ctx, camera, sprites) {
     const now = performance.now();
-    const useSprites = sprites?.has('enemies', 'runner');
 
     for (const e of this.enemies) {
       if (!e || e.hp <= 0) continue;
@@ -497,16 +503,22 @@ export class EnemySystem {
         ctx.shadowBlur = GLOW.hit;
         ctx.fill();
         ctx.shadowBlur = 0;
-      } else if (useSprites && e.tier !== 'boss') {
+      } else if (e.tier !== 'boss') {
         // Try sprite for basic/elite enemies
-        const frameKey = e.tier === 'elite' ? `elite_${e.type}` : e.type;
+        const spriteName = ENEMY_SPRITE_MAP[e.type];
         const size = e.radius * 2.2;
-        if (!sprites.draw(ctx, 'enemies', frameKey, sx, sy, size, size)) {
-          // Fallback: canvas circle
+        if (!spriteName || !sprites?.drawSprite(ctx, 'enemies', spriteName, sx, sy, size, size, 0, 1)) {
+          // Canvas fallback
           ctx.beginPath();
           ctx.arc(sx, sy, e.radius, 0, Math.PI * 2);
           ctx.fillStyle = e.color;
           ctx.fill();
+        }
+        // Elite overlay: draw elite_ring_a on top (slightly larger)
+        if (e.glow && (e.tier === 'elite' || e.tier === 'miniboss')) {
+          const ringSize = size * 1.3;
+          const ringAlpha = 0.5 + Math.sin(now * 0.004 + (e.id || 0)) * 0.2;
+          sprites?.drawSprite(ctx, 'enemies', 'elite_ring_a', sx, sy, ringSize, ringSize, now * 0.001, ringAlpha);
         }
       } else {
         ctx.beginPath();
