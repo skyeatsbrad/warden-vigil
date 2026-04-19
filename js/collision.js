@@ -1,9 +1,9 @@
 // ── Collision & damage ──
 
-import { dist } from './utils.js?v=7';
-import { COLORS } from './data/colors.js?v=7';
+import { dist } from './utils.js?v=8';
+import { COLORS } from './data/colors.js?v=8';
 
-export function processCollisions(player, enemies, particles, camera, grid) {
+export function processCollisions(player, enemies, particles, camera, grid, enemySystem) {
   // Use grid to check only nearby enemies instead of scanning all
   const nearby = grid.query(player.x, player.y, player.radius + 30);
   for (const e of nearby) {
@@ -25,6 +25,52 @@ export function processCollisions(player, enemies, particles, camera, grid) {
         particles.emit(player.x, player.y, 6, COLORS.danger, { speedMax: 100, life: 0.3 });
         particles.text(player.x, player.y - player.radius - 10, dmg.toString(), COLORS.danger);
         camera.applyShake();
+      }
+    }
+
+    // ── Boss slam AOE check ──
+    if (e._slamHit && e._moveMode === 'slam') {
+      const slamD = Math.hypot(player.x - e.x, player.y - e.y);
+      if (slamD < 80) { // BOSS_TUNING.slamRadius
+        const dmg = player.takeDamage(e.damage);
+        if (dmg > 0) {
+          particles.emit(player.x, player.y, 8, '#ff4444', { speedMax: 120, life: 0.4 });
+          particles.text(player.x, player.y - player.radius - 10, dmg.toString(), '#ff4444');
+          camera.applyShake();
+        }
+      }
+      e._slamHit = false; // consume slam event
+    }
+
+    // ── Boss dash contact check ──
+    if (e._moveMode === 'dash' && !e._dashHitPlayer) {
+      const dashD = Math.hypot(player.x - e.x, player.y - e.y);
+      if (dashD < 40 + player.radius) { // BOSS_TUNING.dashHitRadius + player
+        const dmg = player.takeDamage(e.damage);
+        if (dmg > 0) {
+          particles.emit(player.x, player.y, 8, '#ff8800', { speedMax: 120, life: 0.4 });
+          particles.text(player.x, player.y - player.radius - 10, dmg.toString(), '#ff8800');
+          camera.applyShake();
+        }
+        e._dashHitPlayer = true; // only hit once per dash
+      }
+    }
+    if (e._moveMode !== 'dash') e._dashHitPlayer = false;
+  }
+
+  // ── Hazard zone tick damage ──
+  if (enemySystem) {
+    for (const z of enemySystem.hazardZones) {
+      if (!z.active) continue;
+      if (z.tickTimer > 0) continue;
+      const zd = Math.hypot(player.x - z.x, player.y - z.y);
+      if (zd < z.radius + player.radius) {
+        const dmg = player.takeDamage(z.damage);
+        if (dmg > 0) {
+          particles.emit(player.x, player.y, 4, '#9b59b6', { speedMax: 80, life: 0.3 });
+          particles.text(player.x, player.y - player.radius - 10, dmg.toString(), '#9b59b6');
+        }
+        z.tickTimer = z.tickRate;
       }
     }
   }

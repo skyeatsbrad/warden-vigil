@@ -72,6 +72,42 @@ export const ENEMY_TYPES = {
   },
 
   // ── BOSS ──
+  siegebreaker: {
+    name: 'Siegebreaker',
+    color: '#c0392b',
+    radius: 28,
+    hp: 1200,
+    damage: 25,
+    speed: 22,
+    xp: 80,
+    tier: 'boss',
+    glow: true,
+    mechanics: ['slam'],
+  },
+  voidweaver: {
+    name: 'Voidweaver',
+    color: '#8e44ad',
+    radius: 20,
+    hp: 2500,
+    damage: 18,
+    speed: 40,
+    xp: 120,
+    tier: 'boss',
+    glow: true,
+    mechanics: ['voidzone', 'orbit'],
+  },
+  dreadmaw: {
+    name: 'Dreadmaw',
+    color: '#d35400',
+    radius: 32,
+    hp: 4000,
+    damage: 30,
+    speed: 26,
+    xp: 180,
+    tier: 'boss',
+    glow: true,
+    mechanics: ['dash', 'summon_drifters'],
+  },
   voidlord: {
     name: 'Void Lord',
     color: '#6c3483',
@@ -109,26 +145,56 @@ export const REALM_CONFIG = {
   bossEnemyCap: 150,          // reduced enemy cap during boss fight
 };
 
+// Boss mechanic tuning constants
+export const BOSS_TUNING = {
+  // Siegebreaker — slam
+  slamCooldown: 6,         // seconds between slams
+  slamWindup: 0.8,         // seconds of telegraph before slam hits
+  slamRadius: 80,          // damage radius
+  slamDamage: 25,          // base damage (scaled by scaleRealmBoss)
+
+  // Voidweaver — void zones + orbit
+  voidzoneCooldown: 7,     // seconds between zone placements
+  voidzoneWindup: 1.0,     // seconds of telegraph before zone activates
+  voidzoneDuration: 4,     // seconds zone persists after activation
+  voidzoneRadius: 50,      // damage radius
+  voidzoneDamage: 12,      // damage per tick
+  voidzoneTickRate: 0.6,   // seconds between damage ticks
+  voidzoneMaxActive: 3,    // max concurrent zones
+  orbitDistance: 150,       // preferred orbit distance from player
+  orbitBlinkCooldown: 4,   // seconds between repositioning blinks
+
+  // Dreadmaw — dash + summon
+  dashCooldown: 5,         // seconds between dashes
+  dashWindup: 0.6,         // seconds of telegraph
+  dashDistance: 250,        // total dash travel
+  dashSpeed: 600,          // pixels per second during dash
+  dashDamage: 30,          // dash contact damage
+  dashHitRadius: 40,       // collision radius during dash
+  summonCooldown: 10,      // seconds between summon waves
+  summonCount: 3,          // drifters per summon
+};
+
 // Per-realm definitions — config-driven, not hardcoded if/else
 export const REALM_DEFS = [
   {
     name: 'The Outskirts',
     duration: 120,
-    bossType: 'ironhusk',
+    bossType: 'siegebreaker',
     tint: '#1a1a2e',       // subtle background tint (unused for now, placeholder)
     eliteStartTime: 100,   // seconds into realm before elites can spawn
   },
   {
     name: 'The Hollows',
     duration: 110,
-    bossType: 'voidlord',
+    bossType: 'voidweaver',
     tint: '#1e0a2e',
     eliteStartTime: 70,
   },
   {
     name: 'The Abyss',
     duration: 100,
-    bossType: 'voidlord',
+    bossType: 'dreadmaw',
     tint: '#2e0a0a',
     eliteStartTime: 45,
   },

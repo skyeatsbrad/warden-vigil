@@ -1,20 +1,20 @@
 // ── Game state manager ──
 
-import { Player } from './player.js?v=7';
-import { Companion, processOrbitDamage } from './companion.js?v=7';
-import { EnemySystem } from './enemy.js?v=7';
-import { ProjectileSystem } from './projectile.js?v=7';
-import { XPSystem } from './xp.js?v=7';
-import { Particles } from './particles.js?v=7';
-import { Camera } from './camera.js?v=7';
-import { UI } from './ui.js?v=7';
-import { Progression } from './progression.js?v=7';
-import { processCollisions, handleProjectileHit } from './collision.js?v=7';
-import { SpatialGrid } from './spatial-grid.js?v=7';
-import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue } from './data/companions.js?v=7';
-import { COLORS } from './data/colors.js?v=7';
-import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=7';
-import { formatTime, dist, weightedPick } from './utils.js?v=7';
+import { Player } from './player.js?v=8';
+import { Companion, processOrbitDamage } from './companion.js?v=8';
+import { EnemySystem } from './enemy.js?v=8';
+import { ProjectileSystem } from './projectile.js?v=8';
+import { XPSystem } from './xp.js?v=8';
+import { Particles } from './particles.js?v=8';
+import { Camera } from './camera.js?v=8';
+import { UI } from './ui.js?v=8';
+import { Progression } from './progression.js?v=8';
+import { processCollisions, handleProjectileHit } from './collision.js?v=8';
+import { SpatialGrid } from './spatial-grid.js?v=8';
+import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue } from './data/companions.js?v=8';
+import { COLORS } from './data/colors.js?v=8';
+import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=8';
+import { formatTime, dist, weightedPick } from './utils.js?v=8';
 
 export class Game {
   constructor(canvas, input) {
@@ -301,8 +301,11 @@ export class Game {
         this._realmState = 'boss';
         this.enemySystem.bossAlive = true;
         this.enemySystem.spawnRateMult = REALM_CONFIG.bossSpawnMult;
+        // Announce with boss name
+        const bossEnemy = this.enemySystem.enemies.find(e => e.id === this._realmBossId);
+        const bossName = bossEnemy ? bossEnemy.name : bossType;
         this.particles.text(this.player.x, this.player.y - 50,
-          `⚠ ${realmDef.name} BOSS!`, '#ff2222', 22);
+          `⚠ ${bossName}!`, '#ff2222', 22);
         this.camera.applyShake();
       }
     } else if (this._realmState === 'portal') {
@@ -381,7 +384,7 @@ export class Game {
     }, grid);
 
     // Collisions (player vs nearby enemies via grid)
-    processCollisions(this.player, this.enemySystem.enemies, this.particles, this.camera, grid);
+    processCollisions(this.player, this.enemySystem.enemies, this.particles, this.camera, grid, this.enemySystem);
 
     // Pickups
     this._updatePickups(dt);
@@ -464,9 +467,12 @@ export class Game {
           this._portalTimer = REALM_CONFIG.portalDuration;
           this._portalRingT = 0;
           this.enemySystem.bossAlive = false;
-          this.enemySystem.spawnRateMult = 0; // stop spawning during portal
-          this.particles.text(this.player.x, this.player.y - 50,
-            `${realmDef.name} CLEARED!`, '#ffd700', 22);
+          this.enemySystem.spawnRateMult = 0;
+          // Victory feedback
+          this.particles.text(e.x, e.y - 30,
+            `${e.name || e.type} DEFEATED!`, '#ffd700', 22);
+          this.particles.emit(e.x, e.y, 20, '#ffd700', { speedMax: 180, life: 0.6 });
+          this.particles.emit(e.x, e.y, 12, e.color, { speedMax: 140, life: 0.5 });
           this.camera.applyShake();
         }
 
@@ -1132,7 +1138,6 @@ export class Game {
   }
 
   _drawBossHPBar(ctx) {
-    // Find the boss enemy
     const boss = this.enemySystem.enemies.find(e => e.id === this._realmBossId);
     if (!boss) return;
 
@@ -1140,28 +1145,33 @@ export class Game {
     const x = (ctx.canvas.width - barW) / 2;
     const y = 50;
     const hpFrac = Math.max(0, boss.hp / boss.maxHp);
-
-    const realmDef = REALM_DEFS[Math.min(this._realmIndex, REALM_DEFS.length - 1)];
+    const bossName = boss.name || boss.type || 'BOSS';
 
     // Background
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(x - 2, y - 2, barW + 4, barH + 4);
 
-    // HP fill
+    // HP fill with color shift
     ctx.fillStyle = hpFrac > 0.5 ? '#cc2222' : hpFrac > 0.25 ? '#cc6600' : '#ff0000';
     ctx.fillRect(x, y, barW * hpFrac, barH);
 
+    // HP percentage text inside bar
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${Math.ceil(hpFrac * 100)}%`, ctx.canvas.width / 2, y + 12);
+
     // Border
-    ctx.strokeStyle = '#ff4444';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = boss.color || '#ff4444';
+    ctx.lineWidth = 1.5;
     ctx.strokeRect(x - 2, y - 2, barW + 4, barH + 4);
 
-    // Label
-    ctx.save();
+    // Boss name label
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 13px monospace';
+    ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(`⚠ ${realmDef.name} BOSS`, ctx.canvas.width / 2, y - 6);
+    ctx.fillText(`⚠ ${bossName}`, ctx.canvas.width / 2, y - 6);
     ctx.restore();
   }
 
