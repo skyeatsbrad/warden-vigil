@@ -1105,32 +1105,93 @@ export class Game {
   }
 
   _drawPortalRing(ctx, cam) {
-    const frac = this._portalRingT / REALM_CONFIG.portalDuration;
-    const pulse = 0.5 + 0.5 * Math.sin(this._portalRingT * 6);
-    const radius = 60 + 20 * pulse;
+    const t = this._portalRingT;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 6);
+    const baseR = 60 + 20 * pulse;
     const sx = cam.screenX(this.player.x);
     const sy = cam.screenY(this.player.y);
 
-    // Outer ring
-    ctx.beginPath();
-    ctx.arc(sx, sy, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(0,255,200,${0.4 + 0.3 * pulse})`;
+    // ── 1. Inner swirling gradient (3 offset radial fills) ──
+    const innerR = baseR * 0.7;
+    for (let i = 0; i < 3; i++) {
+      const a = t * (1.8 + i * 0.3) + (Math.PI * 2 / 3) * i;
+      const ox = Math.cos(a) * innerR * 0.25;
+      const oy = Math.sin(a) * innerR * 0.25;
+      ctx.beginPath();
+      ctx.arc(sx + ox, sy + oy, innerR * 0.7, 0, Math.PI * 2);
+      ctx.fillStyle = i === 0 ? '#00ffc8' : i === 1 ? '#0088ff' : '#aa44ff';
+      ctx.globalAlpha = 0.04 + 0.02 * pulse;
+      ctx.fill();
+    }
+
+    // ── 2. Rotating outer ring (3 arc segments, dashed look) ──
+    const ringAngle = t * 1.5;
     ctx.lineWidth = 3;
-    ctx.stroke();
+    ctx.globalAlpha = 0.5 + 0.2 * pulse;
+    ctx.strokeStyle = '#00ffc8';
+    for (let i = 0; i < 3; i++) {
+      const segStart = ringAngle + (Math.PI * 2 / 3) * i;
+      ctx.beginPath();
+      ctx.arc(sx, sy, baseR, segStart, segStart + 1.4);
+      ctx.stroke();
+    }
 
-    // Inner glow
+    // Counter-rotating inner ring (2 segments, thinner)
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#0088ff';
+    ctx.globalAlpha = 0.3 + 0.15 * pulse;
+    for (let i = 0; i < 2; i++) {
+      const segStart = -t * 2.2 + Math.PI * i;
+      ctx.beginPath();
+      ctx.arc(sx, sy, baseR * 0.75, segStart, segStart + 1.8);
+      ctx.stroke();
+    }
+
+    // ── 3. Pulsing center core ──
+    const coreR = 8 + 6 * pulse;
+    // Outer glow
     ctx.beginPath();
-    ctx.arc(sx, sy, radius * 0.6, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(0,255,200,${0.08 + 0.05 * pulse})`;
+    ctx.arc(sx, sy, coreR * 2.2, 0, Math.PI * 2);
+    ctx.fillStyle = '#00ffc8';
+    ctx.globalAlpha = 0.06 + 0.04 * pulse;
     ctx.fill();
+    // Bright center
+    ctx.beginPath();
+    ctx.arc(sx, sy, coreR, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha = 0.4 + 0.3 * pulse;
+    ctx.fill();
+    // Color halo
+    ctx.beginPath();
+    ctx.arc(sx, sy, coreR * 1.4, 0, Math.PI * 2);
+    ctx.strokeStyle = '#00ffc8';
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.3 + 0.2 * pulse;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
 
-    // Realm label
+    // ── 4. Floating orbiting motes (4, no particles) ──
+    for (let i = 0; i < 4; i++) {
+      const moteA = t * (2 + i * 0.4) + (Math.PI / 2) * i;
+      const moteR = baseR * (0.4 + 0.15 * Math.sin(t * 3 + i));
+      const mx = sx + Math.cos(moteA) * moteR;
+      const my = sy + Math.sin(moteA) * moteR;
+      ctx.beginPath();
+      ctx.arc(mx, my, 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#00ffc8';
+      ctx.globalAlpha = 0.5 + 0.3 * Math.sin(t * 5 + i * 1.5);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // ── 5. Realm label ──
     ctx.save();
     const nextDef = REALM_DEFS[Math.min(this._realmIndex + 1, REALM_DEFS.length - 1)];
-    ctx.fillStyle = `rgba(255,255,255,${(0.6 + 0.3 * pulse).toFixed(2)})`;
+    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha = 0.6 + 0.3 * pulse;
     ctx.font = 'bold 16px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(nextDef.name, sx, sy - radius - 10);
+    ctx.fillText(nextDef.name, sx, sy - baseR - 12);
     ctx.restore();
   }
 
