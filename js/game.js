@@ -11,7 +11,7 @@ import { UI } from './ui.js?v=13';
 import { Progression } from './progression.js?v=13';
 import { processCollisions, handleProjectileHit } from './collision.js?v=13';
 import { SpatialGrid } from './spatial-grid.js?v=13';
-import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue } from './data/companions.js?v=13';
+import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue, MODIFIERS } from './data/companions.js?v=13';
 import { COLORS } from './data/colors.js?v=13';
 import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=13';
 import { formatTime, dist, weightedPick } from './utils.js?v=13';
@@ -182,6 +182,12 @@ export class Game {
     this.state = 'playing';
     this.elapsed = 0;
     this.ultimateCooldown = 0;
+
+    // Restore HUD/controls hidden during gameover
+    const hud = document.getElementById('hud');
+    const mobileCtrl = document.getElementById('mobile-controls');
+    if (hud) hud.style.opacity = '';
+    if (mobileCtrl) mobileCtrl.style.opacity = '';
     this.player = new Player(0, 0);
     this.companions = [];
     this.enemySystem.clear();
@@ -569,6 +575,15 @@ export class Game {
 
     if (this.state === 'title') return;
     if (!this.player) return;
+
+    // During gameover, suppress the gameplay canvas to near-black
+    if (this.state === 'gameover') {
+      ctx.fillStyle = '#000';
+      ctx.globalAlpha = 0.85;
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      ctx.globalAlpha = 1;
+      return;
+    }
 
     // Grid background — skip on mobile under frame pressure
     if (!(this._isMobile && this.particles.pressure > 0.5)) {
@@ -1484,6 +1499,12 @@ export class Game {
     this.state = 'gameover';
     this.pendingUpgrades = 0;
 
+    // Suppress gameplay layer behind death modal
+    const hud = document.getElementById('hud');
+    const mobileCtrl = document.getElementById('mobile-controls');
+    if (hud) hud.style.opacity = '0';
+    if (mobileCtrl) mobileCtrl.style.opacity = '0';
+
     // End overclock if active
     if (this.overclockTimer > 0) {
       for (const entry of this._overclockOriginals) {
@@ -1523,16 +1544,22 @@ export class Game {
     const curseLine = curseNames.length > 0
       ? `<div class="death-synergies">Curses: <strong style="color:#b07ee8">${curseNames.join(', ')}</strong></div>` : '';
 
+    // Format modifier keys into readable display names
+    const _modLabel = (key) => {
+      const mod = MODIFIERS[key];
+      return mod ? mod.name : key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    };
+
     const breakdownRows = this.companions.map(c => {
       const n = c.evolutionDef ? c.evolutionDef.name : c.def.name;
       const dmg = Math.round(c._totalDamage).toLocaleString();
-      const mods = c.modifiers.length > 0 ? ` [${c.modifiers.join(', ')}]` : '';
-      return `<div class="death-breakdown-row"><span class="death-breakdown-name">${n} Lv${c.level}${mods}</span><span class="death-breakdown-dmg">${dmg} dmg</span></div>`;
+      const modLine = c.modifiers.length > 0
+        ? `<div class="death-breakdown-mods">${c.modifiers.map(_modLabel).join(' · ')}</div>` : '';
+      return `<div class="death-breakdown-entry"><div class="death-breakdown-row"><span class="death-breakdown-name">${n} <span class="death-breakdown-lvl">Lv${c.level}</span></span><span class="death-breakdown-dmg">${dmg}</span></div>${modLine}</div>`;
     }).join('');
 
     statsEl.innerHTML = `
       <div class="death-build-label">${buildLabel}</div>
-      <div class="death-build-sub">Build Identity</div>
       <div class="death-stat-grid">
         <span>Time</span><strong>${formatTime(this.elapsed)}</strong>
         <span>Level</span><strong>${this.player.level}</strong>

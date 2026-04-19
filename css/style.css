@@ -437,6 +437,14 @@ canvas#joystick {
   border-radius: 8px;
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.15s;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+}
+
+#restart-btn {
+  margin-top: 6px;
+  background: linear-gradient(135deg, rgba(100,70,180,0.7), rgba(140,80,200,0.7));
+  border: 1px solid rgba(200,160,255,0.25);
 }
 
 #start-btn:hover, #restart-btn:hover {
@@ -466,10 +474,10 @@ canvas#joystick {
 }
 
 #gameover-screen h1 {
-  font-size: 36px;
+  font-size: 32px;
   color: #e74c3c;
-  margin-bottom: 16px;
-  text-shadow: 0 0 8px rgba(231,76,60,0.4);
+  margin-bottom: 10px;
+  text-shadow: 0 0 8px rgba(231,76,60,0.3);
   letter-spacing: 2px;
 }
 
@@ -488,18 +496,12 @@ canvas#joystick {
 }
 
 .death-build-label {
-  font-size: 20px;
+  font-size: 22px;
   color: #ffd700;
-  margin-bottom: 4px;
-  font-weight: bold;
-}
-
-.death-build-sub {
-  font-size: 11px;
-  color: #777;
   margin-bottom: 14px;
-  text-transform: uppercase;
+  font-weight: bold;
   letter-spacing: 1px;
+  text-shadow: 0 0 6px rgba(255,215,0,0.25);
 }
 
 .death-stat-grid {
@@ -528,9 +530,9 @@ canvas#joystick {
 
 .death-breakdown {
   margin-top: 10px;
-  font-size: 12px;
+  font-size: 13px;
   color: #888;
-  line-height: 1.7;
+  line-height: 1.6;
   text-align: left;
   max-width: 360px;
   width: 100%;
@@ -538,14 +540,29 @@ canvas#joystick {
   padding-top: 10px;
 }
 
+.death-breakdown-entry {
+  margin-bottom: 6px;
+}
+
 .death-breakdown-row {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   gap: 8px;
 }
 
-.death-breakdown-name { color: #aaa; }
-.death-breakdown-dmg { color: #ccc; font-weight: bold; text-align: right; white-space: nowrap; }
+.death-breakdown-name { color: #ccc; }
+.death-breakdown-lvl { color: #888; font-size: 11px; }
+.death-breakdown-dmg { color: #e0e0e0; font-weight: bold; text-align: right; white-space: nowrap; font-size: 12px; }
+.death-breakdown-dmg::after { content: ' dmg'; color: #777; font-weight: normal; font-size: 11px; }
+
+.death-breakdown-mods {
+  font-size: 10px;
+  color: #999;
+  padding-left: 2px;
+  margin-top: 1px;
+  line-height: 1.4;
+}
 
 .hidden {
   display: none !important;
@@ -625,13 +642,14 @@ canvas#joystick {
     padding: calc(16px + env(safe-area-inset-top, 0px)) 12px
              calc(16px + env(safe-area-inset-bottom, 0px)) 12px;
     justify-content: flex-start;
-    padding-top: calc(32px + env(safe-area-inset-top, 0px));
+    padding-top: calc(24px + env(safe-area-inset-top, 0px));
   }
-  #gameover-screen h1 { font-size: 26px; margin-bottom: 12px; }
+  #gameover-screen h1 { font-size: 24px; margin-bottom: 8px; }
   #run-stats { font-size: 13px; }
-  .death-stat-grid { font-size: 12px; gap: 2px 16px; }
-  .death-breakdown { font-size: 11px; }
-  .death-build-label { font-size: 17px; }
+  .death-stat-grid { font-size: 12px; gap: 2px 14px; }
+  .death-breakdown { font-size: 12px; }
+  .death-breakdown-mods { font-size: 9px; }
+  .death-build-label { font-size: 17px; margin-bottom: 10px; }
 }
 
 /* ── Touch Debug Mode ── */
