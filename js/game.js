@@ -99,9 +99,12 @@ export class Game {
     // Death ring effects (expanding circles on kill)
     this._deathRings = [];
 
-    // Ultimate bloom effect
+    // Ultimate bloom effect (multi-phase)
     this._ultBloomT = 0;
-    this._ultBloomMax = 0.5;
+    this._ultBloomMax = 0.8;
+    this._ultColor = '#ffffff';
+    this._ultCoreX = 0;
+    this._ultCoreY = 0;
 
     // Frame pressure tracking for adaptive quality
     this._smoothedDt = 0.016;
@@ -216,6 +219,7 @@ export class Game {
     this._panicRingT = 0;
     this._deathRings = [];
     this._ultBloomT = 0;
+    this._ultColor = '#ffffff';
     this.ui._pickedTradeoffs = new Set();
     this.camera.reset(0, 0);
 
@@ -702,8 +706,7 @@ export class Game {
     const def = COMPANION_DEFS[this.selectedStarter];
     if (!def || !def.ultimate) return;
     this.ultimateCooldown = def.ultimate.cooldown;
-    this._ultBloomT = this._ultBloomMax; // screen-dominant bloom
-    this.camera.applyShake();
+    this._triggerUltimateVFX(def.color || '#ffffff');
 
     const enemies = this.enemySystem.enemies;
 
@@ -1169,28 +1172,118 @@ export class Game {
     ctx.restore();
   }
 
-  _drawUltBloom(ctx) {
-    if (this._ultBloomT <= 0) return;
-    const frac = 1 - this._ultBloomT / this._ultBloomMax;
+  // ── Ultimate VFX trigger ──
+  // Starts the multi-phase visual: dim → core burst → expanding ring → fade.
+  // Particles spawned once (max 30), no per-frame allocation.
+  _triggerUltimateVFX(color) {
+    this._ultBloomT = this._ultBloomMax;
+    this._ultColor = color;
+    this._ultCoreX = this.canvas.width / 2;
+    this._ultCoreY = this.canvas.height / 2;
+    this.camera.applyShake();
 
-    // Background dim
-    if (frac < 0.3) {
-      ctx.fillStyle = `rgba(0,0,0,${0.2 * (1 - frac / 0.3)})`;
-      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    // Core burst particles (radial, capped at 24)
+    const px = this.player.x, py = this.player.y;
+    const burstCount = Math.min(24, this.particles._budgetCount(24));
+    for (let i = 0; i < burstCount; i++) {
+      const a = (Math.PI * 2 / burstCount) * i;
+      const spd = 120 + Math.random() * 100;
+      const p = this.particles._acquire();
+      if (!p) break;
+      p.x = px; p.y = py;
+      p.vx = Math.cos(a) * spd;
+      p.vy = Math.sin(a) * spd;
+      p.life = 0.5 + Math.random() * 0.3;
+      p.maxLife = p.life;
+      p.size = 3 + Math.random() * 2;
+      p.color = color;
+      p.gravity = 0;
+      p.text = null;
     }
 
-    // White radial bloom from center
-    const cx = this.canvas.width / 2;
-    const cy = this.canvas.height / 2;
-    const maxR = Math.max(this.canvas.width, this.canvas.height) * 0.6;
-    const radius = maxR * frac;
-    const alpha = (1 - frac) * 0.35;
+    // Secondary white sparkle ring (6 particles)
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI * 2 / 6) * i + Math.random() * 0.3;
+      const spd = 200 + Math.random() * 60;
+      const p = this.particles._acquire();
+      if (!p) break;
+      p.x = px; p.y = py;
+      p.vx = Math.cos(a) * spd;
+      p.vy = Math.sin(a) * spd;
+      p.life = 0.35;
+      p.maxLife = 0.35;
+      p.size = 2;
+      p.color = '#ffffff';
+      p.gravity = 0;
+      p.text = null;
+    }
+  }
 
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
-    ctx.lineWidth = 6 * (1 - frac);
-    ctx.stroke();
+  _drawUltBloom(ctx) {
+    if (this._ultBloomT <= 0) return;
+    const t = 1 - this._ultBloomT / this._ultBloomMax; // 0→1 over duration
+    const w = this.canvas.width, h = this.canvas.height;
+    const cx = this._ultCoreX, cy = this._ultCoreY;
+    const color = this._ultColor;
+    const maxR = Math.max(w, h) * 0.7;
+
+    // ── Phase 1: Screen dim (strongest at start, fades by t=0.4) ──
+    if (t < 0.4) {
+      const dimAlpha = 0.35 * (1 - t / 0.4);
+      ctx.fillStyle = '#000';
+      ctx.globalAlpha = dimAlpha;
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Phase 2: Bright core burst (t=0→0.3, shrinks) ──
+    if (t < 0.3) {
+      const coreFrac = t / 0.3;
+      const coreR = 60 * (1 - coreFrac * 0.7);
+      const coreAlpha = (1 - coreFrac) * 0.7;
+
+      // Outer glow
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreR * 1.8, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = coreAlpha * 0.25;
+      ctx.fill();
+
+      // Inner white-hot core
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = coreAlpha;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Phase 3: Expanding ring (t=0.05→0.9) ──
+    if (t > 0.05 && t < 0.9) {
+      const ringT = (t - 0.05) / 0.85;
+      const ringR = maxR * ringT;
+      const ringAlpha = (1 - ringT) * 0.6;
+      const ringWidth = 4 * (1 - ringT) + 1;
+
+      // Color ring
+      ctx.beginPath();
+      ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = ringWidth;
+      ctx.globalAlpha = ringAlpha;
+      ctx.stroke();
+
+      // Inner white ring (slightly smaller, brighter)
+      if (ringT < 0.5) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, ringR * 0.92, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = ringAlpha * 0.6;
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
   }
 
   _drawPanicIndicator(ctx) {
