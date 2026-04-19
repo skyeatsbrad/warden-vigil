@@ -11,7 +11,7 @@
 //   sprites.drawSprite(ctx, 'enemy_spike_a', sx, sy, 28, 28);
 //   sprites.drawSprite(ctx, 'portal_ring_a', sx, sy, 120, 120, angle, 0.7);
 
-const CACHE_V = 16;
+const CACHE_V = 17;
 
 // Sprite manifest — key → path relative to repo root.
 // Add new sprites here; everything else is automatic.

@@ -4,14 +4,11 @@ import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy, scaleRealmBoss, 
 import { weightedPick } from './utils.js?v=16';
 import { GLOW } from './data/colors.js?v=16';
 
-// Sprite key mapping: game enemy type → sprite key
+// Sprite key mapping: game enemy type → sprite key + per-type render size
 const ENEMY_SPRITE_MAP = {
-  crawler:  'enemy_spider_a',
-  drifter:  'enemy_spike_a',
+  crawler:  { key: 'enemy_spider_a', size: 48 },   // spider: large, leggy
+  drifter:  { key: 'enemy_spike_a',  size: 40 },   // spike: medium
 };
-
-// Fixed sprite draw size (px) — decoupled from collision radius
-const ENEMY_SPRITE_SIZE = 32;
 
 let _nextEnemyId = 0;
 
@@ -507,8 +504,8 @@ export class EnemySystem {
         ctx.shadowBlur = 0;
       } else if (e.tier !== 'boss') {
         // Try sprite for basic/elite enemies
-        const spriteKey = ENEMY_SPRITE_MAP[e.type];
-        if (!spriteKey || !sprites?.drawSprite(ctx, spriteKey, sx, sy, ENEMY_SPRITE_SIZE, ENEMY_SPRITE_SIZE)) {
+        const spriteInfo = ENEMY_SPRITE_MAP[e.type];
+        if (!spriteInfo || !sprites?.drawSprite(ctx, spriteInfo.key, sx, sy, spriteInfo.size, spriteInfo.size)) {
           // Canvas fallback
           ctx.beginPath();
           ctx.arc(sx, sy, e.radius, 0, Math.PI * 2);

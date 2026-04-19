@@ -1033,10 +1033,9 @@ export class Game {
     const now = performance.now() * 0.004;
     // Sprite key mapping: game pickup type → sprite key
     const SPRITE_MAP = {
-      heal: 'pickup_orb_green_a',
-      essence_surge: 'pickup_crystal_blue_a',
+      heal:          { key: 'pickup_orb_green_a',    size: 26 },
+      essence_surge: { key: 'pickup_crystal_blue_a', size: 24 },
     };
-    const PICKUP_SPRITE_SIZE = 20;
 
     for (const p of this.pickups) {
       if (!cam.isVisible(p.x, p.y, 15)) continue;
@@ -1064,8 +1063,8 @@ export class Game {
       ctx.globalAlpha = fadeAlpha;
 
       // Sprite path — globalAlpha already set to fadeAlpha above
-      const spriteKey = SPRITE_MAP[p.type];
-      if (spriteKey && this.sprites?.drawSprite(ctx, spriteKey, sx, sy + bob, PICKUP_SPRITE_SIZE, PICKUP_SPRITE_SIZE)) {
+      const spriteInfo = SPRITE_MAP[p.type];
+      if (spriteInfo && this.sprites?.drawSprite(ctx, spriteInfo.key, sx, sy + bob, spriteInfo.size, spriteInfo.size)) {
         // drawn by sprite
       } else {
         // Canvas fallback
@@ -1143,12 +1142,13 @@ export class Game {
     const sy = cam.screenY(this.player.y);
 
     // ── Sprite portal layers (behind canvas effects) ──
-    const PORTAL_SPRITE_SIZE = 96;
+    const PORTAL_RING_SIZE = 140;
+    const PORTAL_SWIRL_SIZE = 90;
     // Layer 1: outer ring — rotating, pulsing size
-    const outerSize = PORTAL_SPRITE_SIZE + 32 * pulse;
+    const outerSize = PORTAL_RING_SIZE + 32 * pulse;
     this.sprites?.drawSprite(ctx, 'portal_ring_a', sx, sy, outerSize, outerSize, t * 0.7, 0.55 + 0.25 * pulse);
     // Layer 2: inner swirl — counter-rotating, smaller
-    const innerSize = PORTAL_SPRITE_SIZE * 0.6 + 16 * pulse;
+    const innerSize = PORTAL_SWIRL_SIZE + 16 * pulse;
     this.sprites?.drawSprite(ctx, 'portal_swirl_a', sx, sy, innerSize, innerSize, -t * 1.0, 0.45 + 0.35 * pulse);
 
     // ── 1. Inner swirling gradient (3 offset radial fills) ──
