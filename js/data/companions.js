@@ -404,3 +404,76 @@ export const CURSED_CARDS = [
     effects: { allCooldownMult: 0.65, curseEnemySpeedMult: 1.25 },
   },
 ];
+
+// ── Mastery upgrades (repeatable, post-build fallback) ──
+// mode: 'linear' = flat increment each pick; 'diminish' = baseValue / (1 + 0.3 * rank)
+export const MASTERY_DEFS = [
+  {
+    id: 'mastery_damage', icon: '⚔', title: 'Mastery: Power',
+    desc: '+{n}% global damage (Rank {r})',
+    stat: 'allDamageMult', baseValue: 0.05, mode: 'diminish',
+    maxPicks: 8,
+  },
+  {
+    id: 'mastery_atkspd', icon: '⏱', title: 'Mastery: Tempo',
+    desc: '−{n}% cooldowns (Rank {r})',
+    stat: 'allCooldownMult', baseValue: 0.04, mode: 'diminish',
+    maxPicks: 6,
+  },
+  {
+    id: 'mastery_projspd', icon: '➤', title: 'Mastery: Velocity',
+    desc: '+{n} projectile speed (Rank {r})',
+    stat: 'projSpeedAdd', baseValue: 12, mode: 'linear',
+    maxPicks: 8,
+  },
+  {
+    id: 'mastery_pickup', icon: '✧', title: 'Mastery: Magnetism',
+    desc: '+{n} pickup radius (Rank {r})',
+    stat: 'magnet', baseValue: 10, mode: 'linear',
+    maxPicks: 10,
+  },
+  {
+    id: 'mastery_movespd', icon: '⚡', title: 'Mastery: Stride',
+    desc: '+{n} move speed (Rank {r})',
+    stat: 'speed', baseValue: 8, mode: 'linear',
+    maxPicks: 8,
+  },
+  {
+    id: 'mastery_maxhp', icon: '♥', title: 'Mastery: Fortitude',
+    desc: '+{n} max HP (Rank {r})',
+    stat: 'maxHp', baseValue: 12, mode: 'linear',
+    maxPicks: 10,
+  },
+  {
+    id: 'mastery_heal', icon: '✚', title: 'Mastery: Siphon',
+    desc: 'Heal {n} HP per XP orb (Rank {r})',
+    stat: 'healOnPickup', baseValue: 1, mode: 'linear',
+    maxPicks: 5,
+  },
+  {
+    id: 'mastery_xp', icon: '★', title: 'Mastery: Insight',
+    desc: '+{n}% XP gain (Rank {r})',
+    stat: 'xpMult', baseValue: 0.08, mode: 'diminish',
+    maxPicks: 6,
+  },
+  {
+    id: 'mastery_range', icon: '◎', title: 'Mastery: Reach',
+    desc: '+{n} attack range (Rank {r})',
+    stat: 'allRangeAdd', baseValue: 8, mode: 'linear',
+    maxPicks: 8,
+  },
+  {
+    id: 'mastery_orbitdmg', icon: '⟲', title: 'Mastery: Orbit Force',
+    desc: '+{n}% orbit damage (Rank {r})',
+    stat: 'orbitDmgMult', baseValue: 0.10, mode: 'diminish',
+    maxPicks: 5,
+  },
+];
+
+/** Compute the effective value for a mastery at given rank (0-indexed pick count) */
+export function getMasteryValue(def, rank) {
+  if (def.mode === 'diminish') {
+    return def.baseValue / (1 + 0.3 * rank);
+  }
+  return def.baseValue;
+}

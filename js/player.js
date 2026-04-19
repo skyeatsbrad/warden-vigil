@@ -1,6 +1,6 @@
 // ── Player (Warden) ──
 
-import { COLORS, GLOW } from './data/colors.js?v=6';
+import { COLORS, GLOW } from './data/colors.js?v=7';
 
 export class Player {
   constructor(x, y) {
@@ -57,8 +57,10 @@ export class Player {
   }
 
   addXp(amount) {
-    this.xp += amount;
-    this.totalXp += amount;
+    const mult = this.xpMult || 1;
+    const gained = Math.round(amount * mult);
+    this.xp += gained;
+    this.totalXp += gained;
 
     let levels = 0;
     while (this.xp >= this.xpToNext) {

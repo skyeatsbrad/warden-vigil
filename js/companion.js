@@ -1,8 +1,8 @@
 // ── Companion system ──
 
-import { COMPANION_DEFS, getCompanionStats, MODIFIERS, EVOLUTIONS } from './data/companions.js?v=6';
-import { dist, angle } from './utils.js?v=6';
-import { GLOW, TRAIL } from './data/colors.js?v=6';
+import { COMPANION_DEFS, getCompanionStats, MODIFIERS, EVOLUTIONS } from './data/companions.js?v=7';
+import { dist, angle } from './utils.js?v=7';
+import { GLOW, TRAIL } from './data/colors.js?v=7';
 
 const ORBIT_TRAIL_LEN = TRAIL.orbitLen;
 
@@ -81,11 +81,19 @@ export class Companion {
     if (tradeoffs.allCooldownMult && tradeoffs.allCooldownMult !== 1) {
       base.cooldown *= tradeoffs.allCooldownMult;
     }
+    // Clamp cooldown floor to prevent runaway attack speed
+    base.cooldown = Math.max(0.15, base.cooldown);
     if (tradeoffs.allRangeMult && tradeoffs.allRangeMult !== 1) {
       base.range = Math.round(base.range * tradeoffs.allRangeMult);
     }
+    if (tradeoffs.allRangeAdd) {
+      base.range += tradeoffs.allRangeAdd;
+    }
     if (tradeoffs.allPierceAdd) {
       base.pierce += tradeoffs.allPierceAdd;
+    }
+    if (tradeoffs.projSpeedAdd) {
+      base.projectileSpeed += tradeoffs.projSpeedAdd;
     }
 
     this.stats = base;
@@ -529,13 +537,13 @@ export class Companion {
 }
 
 // ── Orbit damage companion special case ──
-export function processOrbitDamage(companions, enemies, particles, dt, grid) {
+export function processOrbitDamage(companions, enemies, particles, dt, grid, orbitDmgMult = 1) {
   for (const c of companions) {
     if (c.def.attack !== 'orbit') continue;
     const hasBurn = c.hasEffect('contact_burn');
     const hasSurge = c.hasEffect('orbit_surge');
     const tickRate = hasBurn ? 0.15 : 0.3;
-    const dmgMult = hasSurge ? 1.2 : 1;
+    const dmgMult = (hasSurge ? 1.2 : 1) * orbitDmgMult;
     const timerId = '_oht_' + c.id;
     const hitRange = c.stats.radius + c.stats.range * 0.3 + 20;
     const nearby = grid.query(c.x, c.y, hitRange);

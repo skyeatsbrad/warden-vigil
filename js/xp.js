@@ -1,8 +1,8 @@
 // ── XP orbs with object pooling ──
 // Swap-and-pop pool, same pattern as particles/projectiles.
 
-import { dist } from './utils.js?v=6';
-import { COLORS, GLOW } from './data/colors.js?v=6';
+import { dist } from './utils.js?v=7';
+import { COLORS, GLOW } from './data/colors.js?v=7';
 
 const ORB_POOL_SIZE = 200;
 
@@ -90,6 +90,10 @@ export class XPSystem {
       // Pickup
       if (d < player.radius + orb.radius) {
         levelsGained += player.addXp(orb.amount);
+        // Mastery: heal on XP pickup
+        if (player.healOnPickup > 0) {
+          player.heal(player.healOnPickup);
+        }
         this._kill(i);
       } else {
         i++;

@@ -1,7 +1,7 @@
 // ── UI: HUD + Upgrade selection ──
 
-import { COMPANION_DEFS, DROPPABLE_COMPANIONS, MODIFIERS, getModifiersForType, EVOLUTIONS, getEvolveLevel, TRADEOFF_CARDS, CURSED_CARDS } from './data/companions.js?v=6';
-import { pick, weightedPick } from './utils.js?v=6';
+import { COMPANION_DEFS, DROPPABLE_COMPANIONS, MODIFIERS, getModifiersForType, EVOLUTIONS, getEvolveLevel, TRADEOFF_CARDS, CURSED_CARDS, MASTERY_DEFS, getMasteryValue } from './data/companions.js?v=7';
+import { pick, weightedPick } from './utils.js?v=7';
 
 // Rarity weight multipliers — lower = rarer
 const RARITY_WEIGHTS = { common: 1, rare: 0.45, epic: 0.18, cursed: 0.10 };
@@ -40,28 +40,30 @@ export class UI {
     this.killCount.textContent = `Kills: ${player.kills}`;
   }
 
-  showUpgradeSelection(player, companions, onSelect, guaranteedRare = false) {
+  showUpgradeSelection(player, companions, onSelect, guaranteedRare = false, masteryPicks = {}) {
     this.upgradeModal.classList.remove('hidden');
     this._modalHeading.textContent = 'Choose an Upgrade';
     this._rerolls = 1;
     this._lockedIndex = null;
     this._currentChoices = null;
+    this._masteryPicks = masteryPicks;
     this._renderChoices(player, companions, onSelect, guaranteedRare);
   }
 
-  showChestSelection(player, companions, onSelect) {
+  showChestSelection(player, companions, onSelect, masteryPicks = {}) {
     this.upgradeModal.classList.remove('hidden');
     this._modalHeading.textContent = '🎁 Chest Opened!';
     this._rerolls = 0;
     this._lockedIndex = null;
-    this._currentChoices = this._generateChestChoices(player, companions);
+    this._masteryPicks = masteryPicks;
+    this._currentChoices = this._generateChestChoices(player, companions, masteryPicks);
     this._renderCards(this._currentChoices, onSelect, false);
     this.rerollBtn.classList.add('hidden');
   }
 
   _renderChoices(player, companions, onSelect, guaranteedRare) {
     if (!this._currentChoices) {
-      this._currentChoices = this._generateChoices(player, companions, guaranteedRare);
+      this._currentChoices = this._generateChoices(player, companions, guaranteedRare, this._masteryPicks);
     }
 
     this._renderCards(this._currentChoices, onSelect, true);
@@ -78,7 +80,7 @@ export class UI {
       if (this._rerolls <= 0) return;
       this._rerolls--;
 
-      const newAll = this._generateChoices(player, companions, guaranteedRare);
+      const newAll = this._generateChoices(player, companions, guaranteedRare, this._masteryPicks);
       if (this._lockedIndex !== null) {
         const locked = this._currentChoices[this._lockedIndex];
         const others = newAll.filter(c => c.title !== locked.title);
@@ -106,13 +108,15 @@ export class UI {
     for (let idx = 0; idx < choices.length; idx++) {
       const choice = choices[idx];
       const isLocked = this._lockedIndex === idx;
+      const isMastery = choice.type === 'mastery';
       const card = document.createElement('div');
-      card.className = `upgrade-card rarity-border-${choice.rarity}`;
+      card.className = `upgrade-card rarity-border-${choice.rarity}${isMastery ? ' mastery-card' : ''}`;
+      const rarityLabel = isMastery ? 'mastery' : choice.rarity;
       card.innerHTML = `
         <div class="card-icon">${choice.icon}</div>
         <div class="card-title">${choice.title}</div>
         <div class="card-desc">${choice.desc}</div>
-        <div class="card-rarity rarity-${choice.rarity}">${choice.rarity}</div>
+        <div class="card-rarity ${isMastery ? 'rarity-mastery' : `rarity-${choice.rarity}`}">${rarityLabel}</div>
         ${showLock ? `<button class="lock-btn${isLocked ? ' locked' : ''}" data-idx="${idx}">${isLocked ? '🔒' : '🔓'}</button>` : ''}
       `;
       card.addEventListener('click', (e) => {
@@ -203,7 +207,7 @@ export class UI {
 
   // ── Pool building (shared between normal + chest selections) ──
 
-  _buildUpgradePool(player, companions) {
+  _buildUpgradePool(player, companions, masteryPicks = {}) {
     const pool = [];
 
     // ── New companion ──
@@ -289,11 +293,36 @@ export class UI {
       });
     }
 
+    // ── Mastery cards (repeatable fallback) ──
+    // Inject when build-defining options are running low (< 4 unique cards)
+    // or player has hit level 15+
+    const uniqueCount = pool.filter(c =>
+      c.type === 'new_companion' || c.type === 'level_up' || c.type === 'modifier'
+    ).length;
+    if (uniqueCount < 4 || player.level >= 15) {
+      const eligible = MASTERY_DEFS.filter(m => (masteryPicks[m.id] || 0) < m.maxPicks);
+      // Sample up to 4 to avoid flooding
+      const shuffled = eligible.sort(() => Math.random() - 0.5).slice(0, 4);
+      for (const m of shuffled) {
+        const rank = masteryPicks[m.id] || 0;
+        const val = getMasteryValue(m, rank);
+        const displayVal = val < 1 ? Math.round(val * 100) : Math.round(val);
+        pool.push({
+          type: 'mastery', masteryId: m.id,
+          icon: m.icon,
+          title: m.title,
+          desc: m.desc.replace('{n}', displayVal).replace('{r}', rank + 1),
+          rarity: 'common',
+          weight: 2.5,
+        });
+      }
+    }
+
     return pool;
   }
 
-  _generateChoices(player, companions, guaranteedRare) {
-    const pool = this._buildUpgradePool(player, companions);
+  _generateChoices(player, companions, guaranteedRare, masteryPicks = {}) {
+    const pool = this._buildUpgradePool(player, companions, masteryPicks);
 
     // ── Common stat boosts ──
     pool.push({
@@ -349,9 +378,9 @@ export class UI {
     return choices;
   }
 
-  _generateChestChoices(player, companions) {
-    const pool = this._buildUpgradePool(player, companions);
-    if (pool.length === 0) return this._generateChoices(player, companions, true);
+  _generateChestChoices(player, companions, masteryPicks = {}) {
+    const pool = this._buildUpgradePool(player, companions, masteryPicks);
+    if (pool.length === 0) return this._generateChoices(player, companions, true, masteryPicks);
 
     const choices = [];
 

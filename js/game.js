@@ -1,20 +1,20 @@
 // ── Game state manager ──
 
-import { Player } from './player.js?v=6';
-import { Companion, processOrbitDamage } from './companion.js?v=6';
-import { EnemySystem } from './enemy.js?v=6';
-import { ProjectileSystem } from './projectile.js?v=6';
-import { XPSystem } from './xp.js?v=6';
-import { Particles } from './particles.js?v=6';
-import { Camera } from './camera.js?v=6';
-import { UI } from './ui.js?v=6';
-import { Progression } from './progression.js?v=6';
-import { processCollisions, handleProjectileHit } from './collision.js?v=6';
-import { SpatialGrid } from './spatial-grid.js?v=6';
-import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel } from './data/companions.js?v=6';
-import { COLORS } from './data/colors.js?v=6';
-import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=6';
-import { formatTime, dist, weightedPick } from './utils.js?v=6';
+import { Player } from './player.js?v=7';
+import { Companion, processOrbitDamage } from './companion.js?v=7';
+import { EnemySystem } from './enemy.js?v=7';
+import { ProjectileSystem } from './projectile.js?v=7';
+import { XPSystem } from './xp.js?v=7';
+import { Particles } from './particles.js?v=7';
+import { Camera } from './camera.js?v=7';
+import { UI } from './ui.js?v=7';
+import { Progression } from './progression.js?v=7';
+import { processCollisions, handleProjectileHit } from './collision.js?v=7';
+import { SpatialGrid } from './spatial-grid.js?v=7';
+import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue } from './data/companions.js?v=7';
+import { COLORS } from './data/colors.js?v=7';
+import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=7';
+import { formatTime, dist, weightedPick } from './utils.js?v=7';
 
 export class Game {
   constructor(canvas, input) {
@@ -55,7 +55,11 @@ export class Game {
       allCooldownMult: 1,
       allRangeMult: 1,
       allPierceAdd: 0,
+      projSpeedAdd: 0,
+      allRangeAdd: 0,
+      orbitDmgMult: 1,
     };
+    this._masteryPicks = {};     // mastery id → pick count
     this._pendingEvolution = null;
     this._bioHealTimer = 0;
 
@@ -188,7 +192,8 @@ export class Game {
     this.overclockTimer = 0;
     this._overclockOriginals = [];
     this.synergies = {};
-    this.tradeoffs = { allDamageMult: 1, allCooldownMult: 1, allRangeMult: 1, allPierceAdd: 0 };
+    this.tradeoffs = { allDamageMult: 1, allCooldownMult: 1, allRangeMult: 1, allPierceAdd: 0, projSpeedAdd: 0, allRangeAdd: 0, orbitDmgMult: 1 };
+    this._masteryPicks = {};  // id → count
     this._pendingEvolution = null;
     this._bioHealTimer = 0;
     this._momentum = 0;
@@ -283,7 +288,7 @@ export class Game {
     }
 
     // Orbit damage
-    processOrbitDamage(this.companions, this.enemySystem.enemies, this.particles, dt, grid);
+    processOrbitDamage(this.companions, this.enemySystem.enemies, this.particles, dt, grid, this.tradeoffs.orbitDmgMult);
 
     // ── Realm state machine ──
     if (this._realmState === 'active') {
@@ -529,7 +534,7 @@ export class Game {
         this._applyUpgrade(choice);
         this.state = 'playing';
         this._showNextUpgrade();
-      });
+      }, this._masteryPicks);
       return;
     }
 
@@ -544,7 +549,7 @@ export class Game {
       this.guaranteedRare = false;
       this.state = 'playing';
       this._showNextUpgrade();
-    }, this.guaranteedRare);
+    }, this.guaranteedRare, this._masteryPicks);
   }
 
   draw() {
@@ -850,6 +855,56 @@ export class Game {
             if (eff.curseEnemySpeedMult) this._curseEnemySpeedMult *= eff.curseEnemySpeedMult;
             this.ui._pickedTradeoffs.add(cc.id);
             this._recomputeAllStats();
+          }
+        }
+        break;
+
+      case 'mastery':
+        {
+          const mDef = MASTERY_DEFS.find(m => m.id === choice.masteryId);
+          if (mDef) {
+            const rank = this._masteryPicks[mDef.id] || 0;
+            const val = getMasteryValue(mDef, rank);
+            this._masteryPicks[mDef.id] = rank + 1;
+
+            switch (mDef.stat) {
+              case 'allDamageMult':
+                this.tradeoffs.allDamageMult *= (1 + val);
+                this._recomputeAllStats();
+                break;
+              case 'allCooldownMult':
+                this.tradeoffs.allCooldownMult *= (1 - val);
+                this._recomputeAllStats();
+                break;
+              case 'projSpeedAdd':
+                this.tradeoffs.projSpeedAdd += val;
+                this._recomputeAllStats();
+                break;
+              case 'allRangeAdd':
+                this.tradeoffs.allRangeAdd += val;
+                this._recomputeAllStats();
+                break;
+              case 'orbitDmgMult':
+                this.tradeoffs.orbitDmgMult *= (1 + val);
+                this._recomputeAllStats();
+                break;
+              case 'magnet':
+                this.player.magnetRadius += val;
+                break;
+              case 'speed':
+                this.player.speed += val;
+                break;
+              case 'maxHp':
+                this.player.maxHp += val;
+                this.player.heal(val);
+                break;
+              case 'healOnPickup':
+                this.player.healOnPickup = (this.player.healOnPickup || 0) + val;
+                break;
+              case 'xpMult':
+                this.player.xpMult = (this.player.xpMult || 1) * (1 + val);
+                break;
+            }
           }
         }
         break;
