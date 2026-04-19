@@ -2,8 +2,8 @@
 // Pre-allocated pool with swap-and-pop removal. Zero allocations during gameplay
 // (hitIds Sets are cleared and reused, not recreated).
 
-import { dist, angle } from './utils.js?v=11';
-import { TRAIL, GLOW } from './data/colors.js?v=11';
+import { dist, angle } from './utils.js?v=12';
+import { TRAIL, GLOW } from './data/colors.js?v=12';
 
 const PROJ_POOL_SIZE = 300;
 const TRAIL_LEN = TRAIL.projectileLen;
@@ -325,21 +325,18 @@ export class ProjectileSystem {
   }
 
   draw(ctx, camera) {
-    const fadeBase = TRAIL.projectileFade;
-
     // ── Chain lightning lines (jagged, flickering) ──
     for (let i = 0; i < this.count; i++) {
       const p = this.pool[i];
       if (!p.isChainBounce) continue;
       if (!camera.isVisible(p.x, p.y, 60)) continue;
-      if (p.age > 0.15) continue; // only show briefly
+      if (p.age > 0.15) continue;
 
       const sx = camera.screenX(p.chainFromX);
       const sy = camera.screenY(p.chainFromY);
       const ex = camera.screenX(p.x);
       const ey = camera.screenY(p.y);
 
-      // Jagged lightning: 3 segments with random offsets
       const dx = ex - sx, dy = ey - sy;
       const segs = 3;
       ctx.strokeStyle = p.color;
@@ -361,46 +358,70 @@ export class ProjectileSystem {
       ctx.globalAlpha = 1;
     }
 
-    // ── Trail pass (drawn before heads so heads are on top) ──
-    ctx.shadowBlur = 0;
+    // ── Trail streaks (line from oldest trail point to head) ──
+    ctx.lineCap = 'round';
     for (let i = 0; i < this.count; i++) {
       const p = this.pool[i];
       if (p.trailFill < 2) continue;
-      if (!camera.isVisible(p.x, p.y, 30)) continue;
+      if (!camera.isVisible(p.x, p.y, 40)) continue;
 
-      const len = p.trailFill;
-      for (let j = 0; j < len; j++) {
-        const idx = ((p.trailIdx - len + j + TRAIL_LEN) % TRAIL_LEN) * 2;
-        const tx = p.trail[idx];
-        const ty = p.trail[idx + 1];
-        const frac = j / len;
-        const alpha = frac * fadeBase;
-        const r = p.radius * (0.3 + frac * 0.5);
+      // Find oldest trail position
+      const oldIdx = ((p.trailIdx - p.trailFill + TRAIL_LEN) % TRAIL_LEN) * 2;
+      const tailX = camera.screenX(p.trail[oldIdx]);
+      const tailY = camera.screenY(p.trail[oldIdx + 1]);
+      const headX = camera.screenX(p.x);
+      const headY = camera.screenY(p.y);
 
-        ctx.globalAlpha = alpha;
-        ctx.beginPath();
-        ctx.arc(camera.screenX(tx), camera.screenY(ty), r, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        ctx.fill();
-      }
+      // Fading trail line: thick at head, thin at tail
+      ctx.beginPath();
+      ctx.moveTo(tailX, tailY);
+      ctx.lineTo(headX, headY);
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = p.radius * 0.8;
+      ctx.globalAlpha = 0.25;
+      ctx.stroke();
+
+      // Brighter inner line for directionality
+      ctx.beginPath();
+      ctx.moveTo(tailX, tailY);
+      ctx.lineTo(headX, headY);
+      ctx.lineWidth = Math.max(1, p.radius * 0.3);
+      ctx.globalAlpha = 0.5;
+      ctx.stroke();
     }
     ctx.globalAlpha = 1;
 
-    // ── Head pass with glow ──
+    // ── Head pass: short directional streak with glow ──
     ctx.shadowBlur = GLOW.projectile;
     for (let i = 0; i < this.count; i++) {
       const p = this.pool[i];
       if (!camera.isVisible(p.x, p.y)) continue;
-      const sx = camera.screenX(p.x);
-      const sy = camera.screenY(p.y);
+
+      const headX = camera.screenX(p.x);
+      const headY = camera.screenY(p.y);
+
+      // Direction-aligned streak: line from head backwards along velocity
+      const spd = Math.hypot(p.vx, p.vy) || 1;
+      const ndx = p.vx / spd;
+      const ndy = p.vy / spd;
+      const streakLen = Math.min(p.radius * 2.5, 12);
 
       ctx.beginPath();
-      ctx.arc(sx, sy, p.radius, 0, Math.PI * 2);
-      ctx.fillStyle = p.color;
+      ctx.moveTo(headX - ndx * streakLen, headY - ndy * streakLen);
+      ctx.lineTo(headX + ndx * 2, headY + ndy * 2);
+      ctx.strokeStyle = p.color;
       ctx.shadowColor = p.color;
+      ctx.lineWidth = Math.max(1.5, p.radius * 0.7);
+      ctx.stroke();
+
+      // Bright tip dot
+      ctx.beginPath();
+      ctx.arc(headX, headY, Math.max(1.5, p.radius * 0.5), 0, Math.PI * 2);
+      ctx.fillStyle = '#fff';
       ctx.fill();
     }
     ctx.shadowBlur = 0;
+    ctx.lineCap = 'butt';
   }
 
   clear() {

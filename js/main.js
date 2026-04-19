@@ -1,7 +1,7 @@
 // ── Main entry point ──
 
-import { Game } from './game.js?v=11';
-import { Input } from './input.js?v=11';
+import { Game } from './game.js?v=12';
+import { Input } from './input.js?v=12';
 
 const canvas = document.getElementById('game');
 const joystickCanvas = document.getElementById('joystick');

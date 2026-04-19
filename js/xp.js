@@ -1,8 +1,8 @@
 // ── XP orbs with object pooling ──
 // Swap-and-pop pool, same pattern as particles/projectiles.
 
-import { dist } from './utils.js?v=11';
-import { COLORS, GLOW } from './data/colors.js?v=11';
+import { dist } from './utils.js?v=12';
+import { COLORS, GLOW } from './data/colors.js?v=12';
 
 const ORB_POOL_SIZE = 200;
 
