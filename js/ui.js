@@ -1,7 +1,7 @@
 // ── UI: HUD + Upgrade selection ──
 
-import { COMPANION_DEFS, DROPPABLE_COMPANIONS, MODIFIERS, getModifiersForType, EVOLUTIONS, getEvolveLevel, TRADEOFF_CARDS, CURSED_CARDS, MASTERY_DEFS, getMasteryValue } from './data/companions.js?v=18';
-import { pick, weightedPick } from './utils.js?v=18';
+import { COMPANION_DEFS, DROPPABLE_COMPANIONS, MODIFIERS, getModifiersForType, EVOLUTIONS, getEvolveLevel, TRADEOFF_CARDS, CURSED_CARDS, PERK_CARDS, MASTERY_DEFS, getMasteryValue } from './data/companions.js?v=19';
+import { pick, weightedPick } from './utils.js?v=19';
 
 // Rarity weight multipliers — lower = rarer
 const RARITY_WEIGHTS = { common: 1, rare: 0.45, epic: 0.18, cursed: 0.10 };
@@ -297,6 +297,24 @@ export class UI {
         rarity: 'cursed',
         weight: 2 * RARITY_WEIGHTS.cursed,
       });
+    }
+
+    // ── Perk cards (build-defining one-time picks) ──
+    // Gate: only appear after level 3. Sample up to 2 to avoid crowding.
+    if (player.level >= 3) {
+      if (!this._pickedPerks) this._pickedPerks = new Set();
+      const availPerks = PERK_CARDS.filter(p => !this._pickedPerks.has(p.id));
+      const sampledPerks = availPerks.sort(() => Math.random() - 0.5).slice(0, 2);
+      for (const perk of sampledPerks) {
+        pool.push({
+          type: 'perk', perkId: perk.id,
+          icon: perk.icon,
+          title: perk.title,
+          desc: perk.desc,
+          rarity: perk.rarity,
+          weight: 2.5 * RARITY_WEIGHTS[perk.rarity],
+        });
+      }
     }
 
     // ── Mastery cards (repeatable fallback) ──

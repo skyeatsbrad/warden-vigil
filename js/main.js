@@ -1,8 +1,8 @@
 // ── Main entry point ──
 
-import { Game } from './game.js?v=18';
-import { Input } from './input.js?v=18';
-import { SpriteManager } from './sprites.js?v=18';
+import { Game } from './game.js?v=19';
+import { Input } from './input.js?v=19';
+import { SpriteManager } from './sprites.js?v=19';
 
 const canvas = document.getElementById('game');
 const joystickCanvas = document.getElementById('joystick');

@@ -1,6 +1,6 @@
 // ── Player (Warden) ──
 
-import { COLORS, GLOW } from './data/colors.js?v=18';
+import { COLORS, GLOW } from './data/colors.js?v=19';
 
 export class Player {
   constructor(x, y) {
@@ -28,6 +28,9 @@ export class Player {
     this.panicPushForce = 160;
 
     this._bobPhase = 0;
+    this._baseSpeed = this.speed;  // PERK: snapshot for XP Rush speed calculation
+    this._xpRushBonus = 0;        // PERK: current XP Rush speed bonus applied
+    this._collectedXp = false;     // PERK: flag set when XP is collected this frame
   }
 
   update(dt, inputDir) {
@@ -62,6 +65,7 @@ export class Player {
     const gained = Math.round(amount * mult);
     this.xp += gained;
     this.totalXp += gained;
+    this._collectedXp = true; // PERK: signal XP Rush
 
     let levels = 0;
     while (this.xp >= this.xpToNext) {

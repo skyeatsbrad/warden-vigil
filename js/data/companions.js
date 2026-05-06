@@ -407,6 +407,43 @@ export const CURSED_CARDS = [
   },
 ];
 
+// ── Perk cards (build-defining one-time picks) ──
+// Each perk sets game-level flags checked in the update/kill loops.
+// Tags are for display/identity only — not connected to companion category synergies.
+
+export const PERK_CARDS = [
+  {
+    id: 'xp_rush', icon: '💨', title: 'XP Rush',
+    desc: 'Collecting XP grants +20% move speed for 2s',
+    rarity: 'common', tag: 'general',
+  },
+  {
+    id: 'reapers_rhythm', icon: '💀', title: "Reaper's Rhythm",
+    desc: 'Every 10th kill releases a damage pulse',
+    rarity: 'rare', tag: 'death',
+  },
+  {
+    id: 'void_pull', icon: '⊕', title: 'Void Pull',
+    desc: 'Kills pull nearby enemies toward the death point',
+    rarity: 'rare', tag: 'void',
+  },
+  {
+    id: 'desperate_power', icon: '🔥', title: 'Desperate Power',
+    desc: 'Below 30% HP: +40% damage. Above 70% HP: −10% damage',
+    rarity: 'epic', tag: 'risk',
+  },
+  {
+    id: 'siphon_field', icon: '🩸', title: 'Siphon Field',
+    desc: 'Heal 1 HP every 8 kills. Magnet radius −20%',
+    rarity: 'rare', tag: 'risk',
+  },
+  {
+    id: 'soul_harvest', icon: '👻', title: 'Soul Harvest',
+    desc: 'Elite kills grant +30% damage for 3 seconds',
+    rarity: 'epic', tag: 'death',
+  },
+];
+
 // ── Mastery upgrades (repeatable, post-build fallback) ──
 // mode: 'linear' = flat increment each pick; 'diminish' = baseValue / (1 + 0.3 * rank)
 export const MASTERY_DEFS = [

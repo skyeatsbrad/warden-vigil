@@ -1,20 +1,20 @@
 // ── Game state manager ──
 
-import { Player } from './player.js?v=18';
-import { Companion, processOrbitDamage } from './companion.js?v=18';
-import { EnemySystem } from './enemy.js?v=18';
-import { ProjectileSystem } from './projectile.js?v=18';
-import { XPSystem } from './xp.js?v=18';
-import { Particles } from './particles.js?v=18';
-import { Camera } from './camera.js?v=18';
-import { UI } from './ui.js?v=18';
-import { Progression } from './progression.js?v=18';
-import { processCollisions, handleProjectileHit } from './collision.js?v=18';
-import { SpatialGrid } from './spatial-grid.js?v=18';
-import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue, MODIFIERS } from './data/companions.js?v=18';
-import { COLORS } from './data/colors.js?v=18';
-import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=18';
-import { formatTime, dist, weightedPick } from './utils.js?v=18';
+import { Player } from './player.js?v=19';
+import { Companion, processOrbitDamage } from './companion.js?v=19';
+import { EnemySystem } from './enemy.js?v=19';
+import { ProjectileSystem } from './projectile.js?v=19';
+import { XPSystem } from './xp.js?v=19';
+import { Particles } from './particles.js?v=19';
+import { Camera } from './camera.js?v=19';
+import { UI } from './ui.js?v=19';
+import { Progression } from './progression.js?v=19';
+import { processCollisions, handleProjectileHit } from './collision.js?v=19';
+import { SpatialGrid } from './spatial-grid.js?v=19';
+import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, PERK_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue, MODIFIERS } from './data/companions.js?v=19';
+import { COLORS } from './data/colors.js?v=19';
+import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=19';
+import { formatTime, dist, weightedPick } from './utils.js?v=19';
 
 export class Game {
   constructor(canvas, input, sprites) {
@@ -89,6 +89,15 @@ export class Game {
     this._curseDrainPerSec = 0;
     this._curseEnemySpeedMult = 1;
     this._curseDrainAccum = 0;
+
+    // Perk system state
+    this._perks = new Set();        // picked perk IDs
+    this._perkState = {             // mutable counters/timers for active perks
+      reaperKillCount: 0,           // kills since last reaper pulse
+      siphonKillCount: 0,           // kills since last siphon heal
+      xpRushTimer: 0,               // remaining speed buff time
+      soulHarvestTimer: 0,          // remaining elite kill damage buff
+    };
 
     // Run stats
     this._totalDamageDealt = 0;
@@ -231,6 +240,8 @@ export class Game {
     this._curseDrainPerSec = 0;
     this._curseEnemySpeedMult = 1;
     this._curseDrainAccum = 0;
+    this._perks = new Set();
+    this._perkState = { reaperKillCount: 0, siphonKillCount: 0, xpRushTimer: 0, soulHarvestTimer: 0 };
     this._totalDamageDealt = 0;
     this._panicRingT = 0;
     this._deathRings = [];
@@ -238,6 +249,7 @@ export class Game {
     this._ultBloomT = 0;
     this._ultColor = '#ffffff';
     this.ui._pickedTradeoffs = new Set();
+    this.ui._pickedPerks = new Set();
     this.camera.reset(0, 0);
 
     // Realm loop state
@@ -299,9 +311,19 @@ export class Game {
     if (newTier > this._maxMomentumTier) this._maxMomentumTier = newTier;
     const momentumDmgMult = newTier >= 2 ? 1.15 : 1;
 
-    // Set momentum damage multiplier on each companion
+    // Compute perk dynamic damage multiplier (Desperate Power + Soul Harvest)
+    let perkDmgMult = 1;
+    if (this._perks.has('desperate_power')) {
+      const hpRatio = this.player.hp / this.player.maxHp;
+      perkDmgMult *= hpRatio < 0.3 ? 1.4 : hpRatio > 0.7 ? 0.9 : 1;
+    }
+    if (this._perkState.soulHarvestTimer > 0) {
+      perkDmgMult *= 1.3;
+    }
+
+    // Set momentum + perk damage multiplier on each companion
     for (const c of this.companions) {
-      c._momentumDmgMult = momentumDmgMult;
+      c._momentumDmgMult = momentumDmgMult * perkDmgMult;
       c.update(dt, this.player, this.enemySystem.enemies, grid);
       c.attack(this.enemySystem.enemies, this.projectiles, this.particles, grid);
     }
@@ -495,6 +517,56 @@ export class Game {
           this.particles.emit(e.x, e.y, 12, '#ff4444', { speedMax: 130, life: 0.4 });
         }
 
+        // ── Perk kill effects ──
+        // Void Pull: kills pull nearby enemies toward death point
+        if (this._perks.has('void_pull')) {
+          const pullTargets = grid.query2(e.x, e.y, 100);
+          for (const e2 of pullTargets) {
+            if (e2 === e || e2.hp <= 0) continue;
+            const dx = e.x - e2.x;
+            const dy = e.y - e2.y;
+            e2.x += dx * 0.15;
+            e2.y += dy * 0.15;
+          }
+        }
+
+        // Reaper's Rhythm: every 10th kill releases a damage pulse
+        if (this._perks.has('reapers_rhythm')) {
+          this._perkState.reaperKillCount++;
+          if (this._perkState.reaperKillCount >= 10) {
+            this._perkState.reaperKillCount = 0;
+            // AoE pulse around player
+            const pulseTargets = grid.query2(this.player.x, this.player.y, 90);
+            for (const e2 of pulseTargets) {
+              if (e2.hp <= 0) continue;
+              if (dist(this.player, e2) < 90) {
+                e2.hp -= 15;
+                e2.hitFlash = 0.1;
+              }
+            }
+            this.particles.spawnImpact(this.player.x, this.player.y, '#ff6d00', {
+              maxRadius: 90, lifetime: 0.3, particles: 8, particleSpeed: 100,
+            });
+            this.particles.text(this.player.x, this.player.y - 30, 'REAP!', '#ff6d00', 14);
+          }
+        }
+
+        // Siphon Field: heal 1 HP every 8 kills
+        if (this._perks.has('siphon_field')) {
+          this._perkState.siphonKillCount++;
+          if (this._perkState.siphonKillCount >= 8) {
+            this._perkState.siphonKillCount = 0;
+            this.player.heal(1);
+            this.particles.text(this.player.x, this.player.y - 20, '+1', '#2ecc71', 10);
+          }
+        }
+
+        // Soul Harvest: elite kills grant +30% damage for 3s
+        if (this._perks.has('soul_harvest') && isElite) {
+          this._perkState.soulHarvestTimer = 3;
+          this.particles.text(this.player.x, this.player.y - 40, 'SOUL HARVEST!', '#9b59b6', 14);
+        }
+
         // Realm boss death → trigger portal
         if (e.id === this._realmBossId && this._realmState === 'boss') {
           this._realmState = 'portal';
@@ -522,6 +594,31 @@ export class Game {
     if (levelsGained > 0) {
       this.pendingUpgrades += levelsGained;
       this._showNextUpgrade();
+    }
+
+    // ── Perk timers ──
+    // XP Rush: speed buff triggered by XP collection (checked via flag on player)
+    if (this._perks.has('xp_rush') && this.player._collectedXp) {
+      this._perkState.xpRushTimer = 2;
+      this.player._collectedXp = false;
+    }
+    if (this._perkState.xpRushTimer > 0) {
+      this._perkState.xpRushTimer -= dt;
+    }
+
+    // Soul Harvest: timer decay
+    if (this._perkState.soulHarvestTimer > 0) {
+      this._perkState.soulHarvestTimer -= dt;
+    }
+
+    // XP Rush: apply speed boost (additive buff, not save/restore)
+    {
+      const xpRushBonus = (this._perks.has('xp_rush') && this._perkState.xpRushTimer > 0)
+        ? Math.round(this.player._baseSpeed * 0.2) : 0;
+      if (this.player._xpRushBonus !== xpRushBonus) {
+        this.player.speed += xpRushBonus - (this.player._xpRushBonus || 0);
+        this.player._xpRushBonus = xpRushBonus;
+      }
     }
 
     // Ultimate cooldown
@@ -929,7 +1026,10 @@ export class Game {
         break;
 
       case 'stat':
-        if (choice.stat === 'speed') this.player.speed += choice.value;
+        if (choice.stat === 'speed') {
+          this.player.speed += choice.value;
+          this.player._baseSpeed = this.player.speed - (this.player._xpRushBonus || 0);
+        }
         if (choice.stat === 'maxHp') {
           this.player.maxHp += choice.value;
           this.player.heal(choice.value);
@@ -995,6 +1095,7 @@ export class Game {
                 break;
               case 'speed':
                 this.player.speed += val;
+                this.player._baseSpeed = this.player.speed - (this.player._xpRushBonus || 0);
                 break;
               case 'maxHp':
                 this.player.maxHp += val;
@@ -1007,6 +1108,30 @@ export class Game {
                 this.player.xpMult = (this.player.xpMult || 1) * (1 + val);
                 break;
             }
+          }
+        }
+        break;
+
+      case 'perk':
+        {
+          const perk = PERK_CARDS.find(p => p.id === choice.perkId);
+          if (perk) {
+            this._perks.add(perk.id);
+            this.ui._pickedPerks.add(perk.id);
+
+            // Immediate effects on pick
+            switch (perk.id) {
+              case 'siphon_field':
+                // Permanent magnet penalty
+                this.player.magnetRadius = Math.round(this.player.magnetRadius * 0.8);
+                break;
+            }
+
+            // Announce perk
+            this.particles.text(
+              this.player.x, this.player.y - 50,
+              `⚡ ${perk.title}!`, '#ffd700', 18
+            );
           }
         }
         break;
@@ -1652,6 +1777,14 @@ export class Game {
     const curseLine = curseNames.length > 0
       ? `<div class="death-synergies">Curses: <strong style="color:#b07ee8">${curseNames.join(', ')}</strong></div>` : '';
 
+    // Perk names for death screen
+    const perkNames = [...this._perks].map(id => {
+      const p = PERK_CARDS.find(c => c.id === id);
+      return p ? p.title : id;
+    });
+    const perkLine = perkNames.length > 0
+      ? `<div class="death-synergies">Perks: <strong style="color:#ff9800">${perkNames.join(', ')}</strong></div>` : '';
+
     // Format modifier keys into readable display names
     const _modLabel = (key) => {
       const mod = MODIFIERS[key];
@@ -1678,7 +1811,7 @@ export class Game {
         <span>Surges</span><strong>${this._surgesCompleted}/${this._surgeCount}</strong>
         <span>Momentum</span><strong>${momentumLabels[this._maxMomentumTier]}</strong>
       </div>
-      ${synergyLine}${curseLine}
+      ${synergyLine}${curseLine}${perkLine}
       <div class="death-breakdown">${breakdownRows}</div>
     `;
     document.getElementById('gameover-screen').classList.remove('hidden');
