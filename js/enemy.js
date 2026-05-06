@@ -1,8 +1,8 @@
 // ── Enemy spawning + AI ──
 
-import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy, scaleRealmBoss, REALM_CONFIG, REALM_DEFS, BOSS_TUNING } from './data/enemies.js?v=16';
-import { weightedPick } from './utils.js?v=16';
-import { GLOW } from './data/colors.js?v=16';
+import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy, scaleRealmBoss, REALM_CONFIG, REALM_DEFS, BOSS_TUNING } from './data/enemies.js?v=17';
+import { weightedPick } from './utils.js?v=17';
+import { GLOW } from './data/colors.js?v=17';
 
 // Sprite key mapping: game enemy type → sprite key + per-type render size
 const ENEMY_SPRITE_MAP = {

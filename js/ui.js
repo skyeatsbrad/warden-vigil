@@ -1,7 +1,7 @@
 // ── UI: HUD + Upgrade selection ──
 
-import { COMPANION_DEFS, DROPPABLE_COMPANIONS, MODIFIERS, getModifiersForType, EVOLUTIONS, getEvolveLevel, TRADEOFF_CARDS, CURSED_CARDS, MASTERY_DEFS, getMasteryValue } from './data/companions.js?v=16';
-import { pick, weightedPick } from './utils.js?v=16';
+import { COMPANION_DEFS, DROPPABLE_COMPANIONS, MODIFIERS, getModifiersForType, EVOLUTIONS, getEvolveLevel, TRADEOFF_CARDS, CURSED_CARDS, MASTERY_DEFS, getMasteryValue } from './data/companions.js?v=17';
+import { pick, weightedPick } from './utils.js?v=17';
 
 // Rarity weight multipliers — lower = rarer
 const RARITY_WEIGHTS = { common: 1, rare: 0.45, epic: 0.18, cursed: 0.10 };
@@ -42,6 +42,7 @@ export class UI {
 
   showUpgradeSelection(player, companions, onSelect, guaranteedRare = false, masteryPicks = {}) {
     this.upgradeModal.classList.remove('hidden');
+    requestAnimationFrame(() => this.upgradeModal.classList.add('visible'));
     this._modalHeading.textContent = 'Choose an Upgrade';
     this._rerolls = 1;
     this._lockedIndex = null;
@@ -52,6 +53,7 @@ export class UI {
 
   showChestSelection(player, companions, onSelect, masteryPicks = {}) {
     this.upgradeModal.classList.remove('hidden');
+    requestAnimationFrame(() => this.upgradeModal.classList.add('visible'));
     this._modalHeading.textContent = '🎁 Chest Opened!';
     this._rerolls = 0;
     this._lockedIndex = null;
@@ -121,6 +123,7 @@ export class UI {
       `;
       card.addEventListener('click', (e) => {
         if (e.target.classList.contains('lock-btn')) return;
+        this.upgradeModal.classList.remove('visible');
         this.upgradeModal.classList.add('hidden');
         this.rerollBtn.classList.add('hidden');
         this._currentChoices = null;
@@ -153,6 +156,7 @@ export class UI {
   }
 
   hideUpgrade() {
+    this.upgradeModal.classList.remove('visible');
     this.upgradeModal.classList.add('hidden');
     this.rerollBtn.classList.add('hidden');
   }
@@ -160,6 +164,7 @@ export class UI {
   /** Show a guaranteed 2-card evolution choice for a companion */
   showEvolutionChoice(companion, onSelect) {
     this.upgradeModal.classList.remove('hidden');
+    requestAnimationFrame(() => this.upgradeModal.classList.add('visible'));
     this.rerollBtn.classList.add('hidden');
     this._modalHeading.textContent = '⚡ EVOLUTION!';
     this.upgradeChoices.innerHTML = '';
@@ -197,6 +202,7 @@ export class UI {
         <div class="card-rarity rarity-legendary">EVOLUTION</div>
       `;
       card.addEventListener('click', () => {
+        this.upgradeModal.classList.remove('visible');
         this.upgradeModal.classList.add('hidden');
         this._modalHeading.textContent = 'Choose an Upgrade';
         onSelect(path);

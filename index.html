@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Warden's Vigil</title>
-  <link rel="stylesheet" href="css/style.css?v=16">
+  <link rel="stylesheet" href="css/style.css?v=17">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -49,15 +49,32 @@
 
   <!-- Title Screen -->
   <div id="title-screen">
-    <h1>Warden's Vigil</h1>
-    <p class="subtitle">Summon. Survive. Endure.</p>
-    <div id="companion-select">
-      <h3>Choose Starting Companion</h3>
-      <div id="companion-options"></div>
+    <div class="title-particles" aria-hidden="true"></div>
+    <div class="title-content">
+      <h1>Warden's Vigil</h1>
+      <p class="subtitle">Summon. Survive. Endure.</p>
+      <div id="companion-select">
+        <h3>Choose Starting Companion</h3>
+        <div id="companion-options"></div>
+      </div>
+      <button id="start-btn">Begin Vigil</button>
+      <div id="unlock-info"></div>
+      <details class="how-to-play">
+        <summary>How to Play</summary>
+        <div class="htp-content">
+          <p><strong>Move</strong> — WASD / Arrow keys / Touch joystick</p>
+          <p><strong>Companions</strong> attack automatically around you</p>
+          <p><strong>Collect XP</strong> gems to level up and choose upgrades</p>
+          <p><strong>Panic (Q)</strong> — knockback burst on short cooldown</p>
+          <p><strong>Ultimate (Space)</strong> — powerful AoE on long cooldown</p>
+          <p><strong>Survive</strong> escalating waves, defeat realm bosses, and push deeper</p>
+        </div>
+      </details>
     </div>
-    <button id="start-btn">Begin Vigil</button>
-    <div id="unlock-info"></div>
   </div>
+
+  <!-- Screen fade overlay -->
+  <div id="screen-fade" aria-hidden="true"></div>
 
   <!-- Game Over Screen -->
   <div id="gameover-screen" class="hidden">
@@ -66,6 +83,6 @@
     <button id="restart-btn">Try Again</button>
   </div>
 
-  <script type="module" src="js/main.js?v=16"></script>
+  <script type="module" src="js/main.js?v=17"></script>
 </body>
 </html>

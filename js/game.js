@@ -1,20 +1,20 @@
 // ── Game state manager ──
 
-import { Player } from './player.js?v=16';
-import { Companion, processOrbitDamage } from './companion.js?v=16';
-import { EnemySystem } from './enemy.js?v=16';
-import { ProjectileSystem } from './projectile.js?v=16';
-import { XPSystem } from './xp.js?v=16';
-import { Particles } from './particles.js?v=16';
-import { Camera } from './camera.js?v=16';
-import { UI } from './ui.js?v=16';
-import { Progression } from './progression.js?v=16';
-import { processCollisions, handleProjectileHit } from './collision.js?v=16';
-import { SpatialGrid } from './spatial-grid.js?v=16';
-import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue, MODIFIERS } from './data/companions.js?v=16';
-import { COLORS } from './data/colors.js?v=16';
-import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=16';
-import { formatTime, dist, weightedPick } from './utils.js?v=16';
+import { Player } from './player.js?v=17';
+import { Companion, processOrbitDamage } from './companion.js?v=17';
+import { EnemySystem } from './enemy.js?v=17';
+import { ProjectileSystem } from './projectile.js?v=17';
+import { XPSystem } from './xp.js?v=17';
+import { Particles } from './particles.js?v=17';
+import { Camera } from './camera.js?v=17';
+import { UI } from './ui.js?v=17';
+import { Progression } from './progression.js?v=17';
+import { processCollisions, handleProjectileHit } from './collision.js?v=17';
+import { SpatialGrid } from './spatial-grid.js?v=17';
+import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue, MODIFIERS } from './data/companions.js?v=17';
+import { COLORS } from './data/colors.js?v=17';
+import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=17';
+import { formatTime, dist, weightedPick } from './utils.js?v=17';
 
 export class Game {
   constructor(canvas, input, sprites) {
@@ -129,15 +129,21 @@ export class Game {
     unlockInfo.textContent = `Total kills: ${prog.totalKills} | Best time: ${formatTime(prog.bestTime)} | Runs: ${prog.runsCompleted}`;
 
     startBtn.addEventListener('click', () => {
-      titleScreen.classList.add('hidden');
-      this.startRun();
+      // Fade out title screen
+      titleScreen.classList.add('fade-out');
+      setTimeout(() => {
+        titleScreen.classList.add('hidden');
+        this.startRun();
+      }, 500);
     });
 
     // Game over screen
     const restartBtn = document.getElementById('restart-btn');
     restartBtn.addEventListener('click', () => {
+      document.getElementById('gameover-screen').classList.remove('visible');
       document.getElementById('gameover-screen').classList.add('hidden');
       titleScreen.classList.remove('hidden');
+      titleScreen.classList.remove('fade-out');
       // Re-populate in case we unlocked something
       this.progression.populateCompanionSelect(companionOptions, key => {
         this.selectedStarter = key;
@@ -184,11 +190,11 @@ export class Game {
     this.elapsed = 0;
     this.ultimateCooldown = 0;
 
-    // Restore HUD/controls hidden during gameover
+    // Show HUD/controls with fade
     const hud = document.getElementById('hud');
     const mobileCtrl = document.getElementById('mobile-controls');
-    if (hud) hud.style.opacity = '';
-    if (mobileCtrl) mobileCtrl.style.opacity = '';
+    if (hud) { hud.style.opacity = ''; hud.classList.add('visible'); }
+    if (mobileCtrl) { mobileCtrl.style.opacity = ''; mobileCtrl.classList.add('visible'); }
     this.player = new Player(0, 0);
     this.companions = [];
     this.enemySystem.clear();
@@ -1524,11 +1530,11 @@ export class Game {
     this.state = 'gameover';
     this.pendingUpgrades = 0;
 
-    // Suppress gameplay layer behind death modal
+    // Hide HUD/controls and show game over screen with fade
     const hud = document.getElementById('hud');
     const mobileCtrl = document.getElementById('mobile-controls');
-    if (hud) hud.style.opacity = '0';
-    if (mobileCtrl) mobileCtrl.style.opacity = '0';
+    if (hud) hud.classList.remove('visible');
+    if (mobileCtrl) mobileCtrl.classList.remove('visible');
 
     // End overclock if active
     if (this.overclockTimer > 0) {
@@ -1599,6 +1605,10 @@ export class Game {
       <div class="death-breakdown">${breakdownRows}</div>
     `;
     document.getElementById('gameover-screen').classList.remove('hidden');
+    // Trigger fade-in on next frame
+    requestAnimationFrame(() => {
+      document.getElementById('gameover-screen').classList.add('visible');
+    });
   }
 
   _advanceRealm() {
