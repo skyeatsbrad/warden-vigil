@@ -1,8 +1,8 @@
 // ── Enemy spawning + AI ──
 
-import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy, scaleRealmBoss, REALM_CONFIG, REALM_DEFS, BOSS_TUNING } from './data/enemies.js?v=17';
-import { weightedPick } from './utils.js?v=17';
-import { GLOW } from './data/colors.js?v=17';
+import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy, scaleRealmBoss, REALM_CONFIG, REALM_DEFS, BOSS_TUNING } from './data/enemies.js?v=18';
+import { weightedPick } from './utils.js?v=18';
+import { GLOW } from './data/colors.js?v=18';
 
 // Sprite key mapping: game enemy type → sprite key + per-type render size
 const ENEMY_SPRITE_MAP = {
@@ -520,10 +520,10 @@ export class EnemySystem {
         ctx.fill();
       }
 
-      // Elite/boss outline for readability
+      // Elite/boss outline for readability — JUICE: stronger outline for visual hierarchy
       if (e.tier === 'elite' || e.tier === 'miniboss') {
-        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+        ctx.lineWidth = 1.5;
         ctx.stroke();
       }
 

@@ -1,8 +1,8 @@
 // ── XP orbs with object pooling ──
 // Swap-and-pop pool, same pattern as particles/projectiles.
 
-import { dist } from './utils.js?v=17';
-import { COLORS, GLOW } from './data/colors.js?v=17';
+import { dist } from './utils.js?v=18';
+import { COLORS, GLOW } from './data/colors.js?v=18';
 
 const ORB_POOL_SIZE = 200;
 
@@ -63,7 +63,7 @@ export class XPSystem {
     }
   }
 
-  update(dt, player) {
+  update(dt, player, particles, camera) {
     let levelsGained = 0;
     let i = 0;
 
@@ -93,6 +93,10 @@ export class XPSystem {
         // Mastery: heal on XP pickup
         if (player.healOnPickup > 0) {
           player.heal(player.healOnPickup);
+        }
+        // JUICE: tiny sparkle burst on XP collection
+        if (particles && camera && camera.isVisible(orb.x, orb.y)) {
+          particles.emit(orb.x, orb.y, 3, COLORS.xpOrb, { speedMax: 60, life: 0.2 });
         }
         this._kill(i);
       } else {

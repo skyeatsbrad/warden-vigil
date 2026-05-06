@@ -1,20 +1,20 @@
 // ── Game state manager ──
 
-import { Player } from './player.js?v=17';
-import { Companion, processOrbitDamage } from './companion.js?v=17';
-import { EnemySystem } from './enemy.js?v=17';
-import { ProjectileSystem } from './projectile.js?v=17';
-import { XPSystem } from './xp.js?v=17';
-import { Particles } from './particles.js?v=17';
-import { Camera } from './camera.js?v=17';
-import { UI } from './ui.js?v=17';
-import { Progression } from './progression.js?v=17';
-import { processCollisions, handleProjectileHit } from './collision.js?v=17';
-import { SpatialGrid } from './spatial-grid.js?v=17';
-import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue, MODIFIERS } from './data/companions.js?v=17';
-import { COLORS } from './data/colors.js?v=17';
-import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=17';
-import { formatTime, dist, weightedPick } from './utils.js?v=17';
+import { Player } from './player.js?v=18';
+import { Companion, processOrbitDamage } from './companion.js?v=18';
+import { EnemySystem } from './enemy.js?v=18';
+import { ProjectileSystem } from './projectile.js?v=18';
+import { XPSystem } from './xp.js?v=18';
+import { Particles } from './particles.js?v=18';
+import { Camera } from './camera.js?v=18';
+import { UI } from './ui.js?v=18';
+import { Progression } from './progression.js?v=18';
+import { processCollisions, handleProjectileHit } from './collision.js?v=18';
+import { SpatialGrid } from './spatial-grid.js?v=18';
+import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue, MODIFIERS } from './data/companions.js?v=18';
+import { COLORS } from './data/colors.js?v=18';
+import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=18';
+import { formatTime, dist, weightedPick } from './utils.js?v=18';
 
 export class Game {
   constructor(canvas, input, sprites) {
@@ -99,6 +99,9 @@ export class Game {
 
     // Death ring effects (expanding circles on kill)
     this._deathRings = [];
+
+    // Damage flash overlay (red screen flash when player takes damage)
+    this._damageFlashT = 0;
 
     // Ultimate bloom effect (multi-phase)
     this._ultBloomT = 0;
@@ -231,6 +234,7 @@ export class Game {
     this._totalDamageDealt = 0;
     this._panicRingT = 0;
     this._deathRings = [];
+    this._damageFlashT = 0;
     this._ultBloomT = 0;
     this._ultColor = '#ffffff';
     this.ui._pickedTradeoffs = new Set();
@@ -401,6 +405,13 @@ export class Game {
     // Collisions (player vs nearby enemies via grid)
     processCollisions(this.player, this.enemySystem.enemies, this.particles, this.camera, grid, this.enemySystem);
 
+    // JUICE: damage flash trigger — check if player took damage this frame
+    if (this.player._tookDamage) {
+      this._damageFlashT = 0.15;
+      this.player._tookDamage = false;
+    }
+    if (this._damageFlashT > 0) this._damageFlashT -= dt;
+
     // Pickups
     this._updatePickups(dt);
 
@@ -436,6 +447,16 @@ export class Game {
           particles: isElite ? 10 : 6,
           particleSpeed: isElite ? 160 : 100,
         });
+
+        // JUICE: death ring — expanding white ring for kill satisfaction
+        if (this._deathRings.length < 8) {
+          this._deathRings.push({
+            x: e.x, y: e.y, t: 0,
+            maxT: isElite ? 0.35 : 0.2,
+            maxR: e.radius * (isElite ? 5 : 3),
+            color: e.color,
+          });
+        }
 
         if (isElite) {
           this.camera.applyShake();
@@ -496,7 +517,7 @@ export class Game {
 
     // XP collection — apply momentum magnet bonus temporarily
     this.player.magnetRadius += magnetBonus;
-    const levelsGained = this.xpSystem.update(dt, this.player);
+    const levelsGained = this.xpSystem.update(dt, this.player, this.particles, this.camera);
     this.player.magnetRadius -= magnetBonus;
     if (levelsGained > 0) {
       this.pendingUpgrades += levelsGained;
@@ -517,6 +538,14 @@ export class Game {
 
     // Particles
     this.particles.update(dt);
+
+    // JUICE: decay death rings
+    for (let i = this._deathRings.length - 1; i >= 0; i--) {
+      this._deathRings[i].t += dt;
+      if (this._deathRings[i].t >= this._deathRings[i].maxT) {
+        this._deathRings.splice(i, 1);
+      }
+    }
 
     // Update HUD
     this.ui.updateHUD(this.player, this.elapsed, this._realmIndex, this._realmState, realmDef);
@@ -625,6 +654,18 @@ export class Game {
     // Hit effects + particles (topmost world layer — includes impact rings)
     this.particles.draw(ctx, cam);
 
+    // JUICE: death rings (expanding circles on kill — world-space)
+    for (const ring of this._deathRings) {
+      const progress = ring.t / ring.maxT;
+      const r = ring.maxR * progress;
+      const alpha = (1 - progress) * 0.5;
+      ctx.beginPath();
+      ctx.arc(cam.screenX(ring.x), cam.screenY(ring.y), r, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255,255,255,${alpha.toFixed(2)})`;
+      ctx.lineWidth = 2 - progress * 1.5;
+      ctx.stroke();
+    }
+
     // Panic pulse ring (screen-space effect)
     this._drawPanicRing(ctx, cam);
 
@@ -659,6 +700,27 @@ export class Game {
 
     // Joystick
     this.input.drawJoystick();
+
+    // JUICE: damage flash overlay (red edge flash when hit)
+    if (this._damageFlashT > 0) {
+      const flashAlpha = (this._damageFlashT / 0.15) * 0.3;
+      ctx.fillStyle = `rgba(255,20,20,${flashAlpha.toFixed(3)})`;
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+
+    // JUICE: low-health vignette (red border pulse when HP < 30%)
+    if (this.player && this.player.hp > 0 && this.player.hp / this.player.maxHp < 0.3) {
+      const hpRatio = this.player.hp / this.player.maxHp;
+      const intensity = (0.3 - hpRatio) / 0.3; // 0→1 as HP drops
+      const pulse = 0.5 + Math.sin(performance.now() * 0.006) * 0.2;
+      const alpha = intensity * pulse * 0.4;
+      const w = this.canvas.width, h = this.canvas.height;
+      const grad = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.3, w / 2, h / 2, Math.max(w, h) * 0.7);
+      grad.addColorStop(0, 'rgba(255,0,0,0)');
+      grad.addColorStop(1, `rgba(255,0,0,${alpha.toFixed(3)})`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+    }
   }
 
   _drawGrid(ctx, cam) {
@@ -694,6 +756,21 @@ export class Game {
     const ready = this.ultimateCooldown <= 0;
 
     ctx.save();
+
+    // JUICE: pulsing outer glow ring when ult is ready
+    if (ready) {
+      const pulse = Math.sin(performance.now() * 0.005) * 0.3 + 0.7;
+      const glowR = r + 6 + pulse * 4;
+      ctx.beginPath();
+      ctx.arc(x, y, glowR, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(200,160,255,${(pulse * 0.5).toFixed(2)})`;
+      ctx.lineWidth = 2;
+      ctx.shadowColor = '#c9a0ff';
+      ctx.shadowBlur = 12 + pulse * 8;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fillStyle = ready ? 'rgba(150,100,255,0.6)' : 'rgba(50,50,50,0.6)';

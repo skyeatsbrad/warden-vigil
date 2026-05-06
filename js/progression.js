@@ -1,6 +1,6 @@
 // ── Meta-progression: unlocks, saves ──
 
-import { COMPANION_DEFS, STARTER_COMPANIONS } from './data/companions.js?v=17';
+import { COMPANION_DEFS, STARTER_COMPANIONS } from './data/companions.js?v=18';
 
 const STORAGE_KEY = 'wardenVigil_progress';
 

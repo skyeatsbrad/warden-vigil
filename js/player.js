@@ -1,6 +1,6 @@
 // ── Player (Warden) ──
 
-import { COLORS, GLOW } from './data/colors.js?v=17';
+import { COLORS, GLOW } from './data/colors.js?v=18';
 
 export class Player {
   constructor(x, y) {
@@ -49,6 +49,7 @@ export class Player {
     this.hp -= dmg;
     this.invulnTime = this.invulnDuration;
     if (this.hp < 0) this.hp = 0;
+    this._tookDamage = true; // JUICE: flag for screen flash
     return dmg;
   }
 
