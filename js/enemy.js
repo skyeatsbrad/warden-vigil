@@ -1,8 +1,8 @@
 // ── Enemy spawning + AI ──
 
-import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy, scaleRealmBoss, REALM_CONFIG, REALM_DEFS, BOSS_TUNING } from './data/enemies.js?v=20';
-import { weightedPick } from './utils.js?v=20';
-import { GLOW } from './data/colors.js?v=20';
+import { ENEMY_TYPES, WAVE_CONFIG, getSpawnWeights, scaleEnemy, scaleRealmBoss, REALM_CONFIG, REALM_DEFS, BOSS_TUNING } from './data/enemies.js?v=21';
+import { weightedPick } from './utils.js?v=21';
+import { GLOW } from './data/colors.js?v=21';
 
 // Sprite key mapping: game enemy type → sprite key + per-type render size
 const ENEMY_SPRITE_MAP = {
@@ -21,6 +21,7 @@ export class EnemySystem {
     this.realmIndex = 0;
     this.bossAlive = false;
     this.curseSpeedMult = 1;
+    this.realmHpMult = 1;      // realm modifier HP multiplier (applied to all spawns)
     this.hazardZones = []; // {x, y, radius, t, maxT, damage, tickRate, tickTimer, active}
   }
 
@@ -183,6 +184,10 @@ export class EnemySystem {
     if (!base) return false;
 
     const scaled = scaleEnemy(base, effectiveMinutes);
+    // Apply realm modifier HP scaling
+    if (this.realmHpMult !== 1) {
+      scaled.hp = Math.round(scaled.hp * this.realmHpMult);
+    }
 
     // Spawn off-screen with spread so waves do not stack on one point
     const margin = 90;
@@ -382,8 +387,9 @@ export class EnemySystem {
           if (!this._hasCapacity(1)) break;
           const a = (Math.PI * 2 / Math.max(1, count)) * i;
           const base = ENEMY_TYPES.crawler;
+          const hp = Math.round(base.hp * this.realmHpMult);
           this.enemies.push({
-            id: _nextEnemyId++, type: 'crawler', ...base, maxHp: base.hp,
+            id: _nextEnemyId++, type: 'crawler', ...base, hp, maxHp: hp,
             x: e.x + Math.cos(a) * 48, y: e.y + Math.sin(a) * 48,
             hitFlash: 0, slowTimer: 0, glow: false, teleport: false, mechanics: null,
           });
@@ -400,8 +406,9 @@ export class EnemySystem {
           if (!this._hasCapacity(1)) break;
           const a = (Math.PI * 2 / T.summonCount) * i;
           const base = ENEMY_TYPES.drifter;
+          const hp = Math.round(base.hp * this.realmHpMult);
           this.enemies.push({
-            id: _nextEnemyId++, type: 'drifter', ...base, maxHp: base.hp,
+            id: _nextEnemyId++, type: 'drifter', ...base, hp, maxHp: hp,
             x: e.x + Math.cos(a) * 48, y: e.y + Math.sin(a) * 48,
             hitFlash: 0, slowTimer: 0, glow: false, teleport: false, mechanics: null,
           });
@@ -664,6 +671,7 @@ export class EnemySystem {
     this.spawnRateMult = 1;
     this.bossAlive = false;
     this.curseSpeedMult = 1;
+    this.realmHpMult = 1;
     this.hazardZones.length = 0;
   }
 

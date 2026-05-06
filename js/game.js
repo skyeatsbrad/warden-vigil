@@ -1,20 +1,20 @@
 // ── Game state manager ──
 
-import { Player } from './player.js?v=20';
-import { Companion, processOrbitDamage } from './companion.js?v=20';
-import { EnemySystem } from './enemy.js?v=20';
-import { ProjectileSystem } from './projectile.js?v=20';
-import { XPSystem } from './xp.js?v=20';
-import { Particles } from './particles.js?v=20';
-import { Camera } from './camera.js?v=20';
-import { UI } from './ui.js?v=20';
-import { Progression } from './progression.js?v=20';
-import { processCollisions, handleProjectileHit } from './collision.js?v=20';
-import { SpatialGrid } from './spatial-grid.js?v=20';
-import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, PERK_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue, MODIFIERS } from './data/companions.js?v=20';
-import { COLORS } from './data/colors.js?v=20';
-import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=20';
-import { formatTime, dist, weightedPick } from './utils.js?v=20';
+import { Player } from './player.js?v=21';
+import { Companion, processOrbitDamage } from './companion.js?v=21';
+import { EnemySystem } from './enemy.js?v=21';
+import { ProjectileSystem } from './projectile.js?v=21';
+import { XPSystem } from './xp.js?v=21';
+import { Particles } from './particles.js?v=21';
+import { Camera } from './camera.js?v=21';
+import { UI } from './ui.js?v=21';
+import { Progression } from './progression.js?v=21';
+import { processCollisions, handleProjectileHit } from './collision.js?v=21';
+import { SpatialGrid } from './spatial-grid.js?v=21';
+import { COMPANION_DEFS, SYNERGY_DEFS, TRADEOFF_CARDS, CURSED_CARDS, PERK_CARDS, EVOLUTIONS, getEvolveLevel, MASTERY_DEFS, getMasteryValue, MODIFIERS } from './data/companions.js?v=21';
+import { COLORS } from './data/colors.js?v=21';
+import { REALM_CONFIG, REALM_DEFS } from './data/enemies.js?v=21';
+import { formatTime, dist, weightedPick } from './utils.js?v=21';
 
 export class Game {
   constructor(canvas, input, sprites) {
@@ -263,6 +263,18 @@ export class Game {
     this._portalTimer = 0;
     this._portalRingT = 0;
 
+    // Boss warning state
+    this._bossWarningActive = false;
+    this._bossWarningT = 0;
+
+    // Realm modifier multipliers (current realm only, reset on advance)
+    this._realmSpeedMult = 1;
+    this._realmDmgMult = 1;
+    this._realmXpMult = 1;
+    this._realmMagnetMult = 1;
+    this._realmSpawnMult = 1;
+    this._pendingRealmUpgrade = false;
+
     // Spawn starting companion
     const starter = new Companion(this.selectedStarter, this.player);
     this.companions.push(starter);
@@ -280,6 +292,14 @@ export class Game {
 
   update(dt) {
     if (this.state !== 'playing') return;
+
+    // Deferred realm upgrade: show free upgrade at start of frame after realm transition
+    if (this._pendingRealmUpgrade) {
+      this._pendingRealmUpgrade = false;
+      this.pendingUpgrades++;
+      this._showNextUpgrade();
+      return; // pause gameplay while upgrade modal is open
+    }
 
     // Frame pressure: smoothed ratio of actual dt to target dt
     this._smoothedDt += (dt - this._smoothedDt) * 0.1;
@@ -321,9 +341,9 @@ export class Game {
       perkDmgMult *= 1.3;
     }
 
-    // Set momentum + perk damage multiplier on each companion
+    // Set momentum + perk + realm damage multiplier on each companion
     for (const c of this.companions) {
-      c._momentumDmgMult = momentumDmgMult * perkDmgMult;
+      c._momentumDmgMult = momentumDmgMult * perkDmgMult * this._realmDmgMult;
       c.update(dt, this.player, this.enemySystem.enemies, grid);
       c.attack(this.enemySystem.enemies, this.projectiles, this.particles, grid);
     }
@@ -348,6 +368,21 @@ export class Game {
 
     // ── Realm state machine ──
     if (this._realmState === 'active') {
+      const timeUntilBoss = realmDef.duration - this._realmElapsed;
+
+      // Boss warning phase: activate 30s before boss spawn
+      if (!this._bossWarningActive && timeUntilBoss <= REALM_CONFIG.warningTime && timeUntilBoss > 0) {
+        this._bossWarningActive = true;
+        this._bossWarningT = 0;
+        this.particles.text(this.player.x, this.player.y - 50,
+          '⚠ BOSS INCOMING', '#ffaa00', 20);
+      }
+      if (this._bossWarningActive) {
+        this._bossWarningT += dt;
+        // Boost spawn pressure during warning (temporary multiplier, not permanent)
+        this.enemySystem.spawnRateMult = REALM_CONFIG.warningSpawnMult;
+      }
+
       if (this._realmElapsed >= realmDef.duration) {
         // Spawn realm boss
         const bossType = realmDef.bossType || 'voidlord';
@@ -356,6 +391,7 @@ export class Game {
         );
         this._realmBossRef = this.enemySystem.enemies.find(e => e.id === this._realmBossId) || null;
         this._realmState = 'boss';
+        this._bossWarningActive = false;
         this.enemySystem.bossAlive = true;
         this.enemySystem.spawnRateMult = REALM_CONFIG.bossSpawnMult;
         // Announce with boss name
@@ -373,8 +409,8 @@ export class Game {
     }
     // Boss death is detected below in the enemy removal loop
 
-    // ── Surge / pressure spike system (paused during boss/portal) ──
-    if (this._realmState === 'active') {
+    // ── Surge / pressure spike system (paused during boss/portal/warning) ──
+    if (this._realmState === 'active' && !this._bossWarningActive) {
       this._surgeTimer += dt;
       if (!this._surgeActive && this._surgeTimer >= 90) {
         this._surgeActive = true;
@@ -405,9 +441,13 @@ export class Game {
     if (this._curseSpawnMult !== 1) {
       this.enemySystem.spawnTimer -= dt * (1 / this._curseSpawnMult - 1);
     }
+    // Apply realm spawn multiplier
+    if (this._realmSpawnMult !== 1) {
+      this.enemySystem.spawnTimer -= dt * (1 / this._realmSpawnMult - 1);
+    }
 
-    // Apply curse enemy speed
-    this.enemySystem.curseSpeedMult = this._curseEnemySpeedMult;
+    // Compose enemy speed: curse × realm modifiers
+    this.enemySystem.curseSpeedMult = this._curseEnemySpeedMult * this._realmSpeedMult;
 
     // Curse HP drain
     if (this._curseDrainPerSec > 0) {
@@ -567,7 +607,7 @@ export class Game {
           this.particles.text(this.player.x, this.player.y - 40, 'SOUL HARVEST!', '#9b59b6', 14);
         }
 
-        // Realm boss death → trigger portal
+        // Realm boss death → trigger portal + heal
         if (e.id === this._realmBossId && this._realmState === 'boss') {
           this._realmState = 'portal';
           this._portalTimer = REALM_CONFIG.portalDuration;
@@ -575,9 +615,14 @@ export class Game {
           this._realmBossRef = null;
           this.enemySystem.bossAlive = false;
           this.enemySystem.spawnRateMult = 0;
+          // Portal heal reward
+          const healAmt = Math.floor(this.player.maxHp * REALM_CONFIG.portalHealPct);
+          this.player.heal(healAmt);
           // Victory feedback
           this.particles.text(e.x, e.y - 30,
             `${e.name || e.type} DEFEATED!`, '#ffd700', 22);
+          this.particles.text(this.player.x, this.player.y - 20,
+            `+${healAmt} HP`, '#2ecc71', 14);
           this.particles.emit(e.x, e.y, 20, '#ffd700', { speedMax: 180, life: 0.6 });
           this.particles.emit(e.x, e.y, 12, e.color, { speedMax: 140, life: 0.5 });
           this.camera.applyShake();
@@ -587,10 +632,16 @@ export class Game {
       }
     }
 
-    // XP collection — apply momentum magnet bonus temporarily
-    this.player.magnetRadius += magnetBonus;
+    // XP collection — apply momentum magnet bonus + realm magnet modifier temporarily
+    const realmMagnetAdj = this._realmMagnetMult !== 1
+      ? this.player.magnetRadius * (this._realmMagnetMult - 1) : 0;
+    this.player.magnetRadius += magnetBonus + realmMagnetAdj;
+    // Apply realm XP multiplier temporarily
+    const prevXpMult = this.player.xpMult || 1;
+    this.player.xpMult = prevXpMult * this._realmXpMult;
     const levelsGained = this.xpSystem.update(dt, this.player, this.particles, this.camera);
-    this.player.magnetRadius -= magnetBonus;
+    this.player.xpMult = prevXpMult;
+    this.player.magnetRadius -= (magnetBonus + realmMagnetAdj);
     if (levelsGained > 0) {
       this.pendingUpgrades += levelsGained;
       this._showNextUpgrade();
@@ -777,6 +828,11 @@ export class Game {
     // Boss HP bar during boss phase
     if (this._realmState === 'boss') {
       this._drawBossHPBar(ctx);
+    }
+
+    // Boss warning indicator during pre-boss phase
+    if (this._bossWarningActive) {
+      this._drawBossWarning(ctx);
     }
 
     // Ultimate cooldown indicator
@@ -1481,6 +1537,28 @@ export class Game {
     ctx.restore();
   }
 
+  _drawBossWarning(ctx) {
+    const t = this._bossWarningT;
+    const pulse = Math.sin(t * 4) * 0.3 + 0.5;
+    const realmDef = this._currentRealmDef;
+    const timeLeft = Math.max(0, Math.ceil(realmDef.duration - this._realmElapsed));
+
+    // Amber pulsing border
+    ctx.strokeStyle = `rgba(255,170,0,${pulse * 0.6})`;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(2, 2, ctx.canvas.width - 4, ctx.canvas.height - 4);
+
+    // Warning text at top center
+    ctx.save();
+    ctx.fillStyle = `rgba(255,170,0,${0.6 + pulse * 0.4})`;
+    ctx.font = 'bold 16px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const safeTop = this._safeTop || 0;
+    ctx.fillText(`⚠ BOSS INCOMING · ${timeLeft}s`, ctx.canvas.width / 2, 30 + safeTop);
+    ctx.restore();
+  }
+
   // ── Ultimate VFX trigger ──
   // Starts the multi-phase visual: dim → core burst → expanding ring → fade.
   // Particles spawned once (max 30), no per-frame allocation.
@@ -1827,6 +1905,7 @@ export class Game {
     this._realmState = 'active';
     this._realmBossId = -1;
     this._realmBossRef = null;
+    this._bossWarningActive = false;
 
     // Cache realm def for this realm
     this._currentRi = Math.min(this._realmIndex, REALM_DEFS.length - 1);
@@ -1845,9 +1924,27 @@ export class Game {
     // Apply realm-based spawn interval compression
     this.enemySystem.spawnInterval *= Math.pow(REALM_CONFIG.intervalPerRealm, this._currentRi);
 
+    // ── Apply current realm modifier (replaces previous realm's modifier) ──
+    const mod = this._currentRealmDef.modifier;
+    this._realmSpeedMult = mod?.enemySpeedMult || 1;
+    this._realmDmgMult = mod?.playerDmgMult || 1;
+    this._realmXpMult = mod?.xpMult || 1;
+    this._realmMagnetMult = mod?.magnetMult || 1;
+    this._realmSpawnMult = mod?.spawnMult || 1;
+    this.enemySystem.realmHpMult = mod?.enemyHpMult || 1;
+
+    // Announce realm name
     this.particles.text(this.player.x, this.player.y - 50,
       this._currentRealmDef.name, '#00ffcc', 24);
+    // Announce modifier if present
+    if (mod) {
+      this.particles.text(this.player.x, this.player.y - 25,
+        mod.desc, '#ffaa00', 12);
+    }
     this.camera.applyShake();
+
+    // Grant free upgrade on next frame (deferred to avoid mid-frame state issues)
+    this._pendingRealmUpgrade = true;
   }
 
   _computeBuildLabel() {

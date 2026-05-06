@@ -143,6 +143,9 @@ export const REALM_CONFIG = {
   intervalPerRealm: 0.92,     // spawn interval multiplier per realm (compounds)
   bossSpawnMult: 0.55,        // spawn rate multiplier while realm boss alive (~45% reduction)
   bossEnemyCap: 150,          // reduced enemy cap during boss fight
+  warningTime: 30,            // seconds of warning before boss spawns
+  warningSpawnMult: 1.3,      // spawn pressure boost during warning phase
+  portalHealPct: 0.25,        // heal % of max HP on boss kill
 };
 
 // Boss mechanic tuning constants
@@ -179,10 +182,11 @@ export const BOSS_TUNING = {
 export const REALM_DEFS = [
   {
     name: 'The Outskirts',
-    duration: 140,
+    duration: 170,
     bossType: 'siegebreaker',
     tint: '#1a1a2e',
     eliteStartTime: 90,
+    modifier: null,  // baseline realm — no modifier
   },
   {
     name: 'The Hollows',
@@ -190,6 +194,7 @@ export const REALM_DEFS = [
     bossType: 'voidweaver',
     tint: '#1e0a2e',
     eliteStartTime: 65,
+    modifier: { name: 'Creeping Haste', desc: 'Enemies move 15% faster', enemySpeedMult: 1.15 },
   },
   {
     name: 'The Abyss',
@@ -197,6 +202,7 @@ export const REALM_DEFS = [
     bossType: 'dreadmaw',
     tint: '#2e0a0a',
     eliteStartTime: 40,
+    modifier: { name: 'Fortified', desc: 'Enemies tougher, but you hit harder', enemyHpMult: 1.2, playerDmgMult: 1.1 },
   },
   {
     name: 'The Crucible',
@@ -204,6 +210,7 @@ export const REALM_DEFS = [
     bossType: 'voidlord',
     tint: '#2e1a00',
     eliteStartTime: 25,
+    modifier: { name: 'Rich Corruption', desc: 'More XP, less magnet', xpMult: 1.5, magnetMult: 0.8 },
   },
   {
     name: 'The Endless',
@@ -211,6 +218,7 @@ export const REALM_DEFS = [
     bossType: 'voidlord',
     tint: '#0a0a0a',
     eliteStartTime: 15,
+    modifier: { name: 'Chaos', desc: 'Everything intensifies', enemySpeedMult: 1.1, enemyHpMult: 1.15, spawnMult: 0.9 },
   },
 ];
 

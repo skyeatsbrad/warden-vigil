@@ -1,7 +1,7 @@
 // ── UI: HUD + Upgrade selection ──
 
-import { COMPANION_DEFS, DROPPABLE_COMPANIONS, MODIFIERS, getModifiersForType, getModifiersForCompanion, EVOLUTIONS, getEvolveLevel, TRADEOFF_CARDS, CURSED_CARDS, PERK_CARDS, MASTERY_DEFS, getMasteryValue } from './data/companions.js?v=20';
-import { pick, weightedPick } from './utils.js?v=20';
+import { COMPANION_DEFS, DROPPABLE_COMPANIONS, MODIFIERS, getModifiersForType, getModifiersForCompanion, EVOLUTIONS, getEvolveLevel, TRADEOFF_CARDS, CURSED_CARDS, PERK_CARDS, MASTERY_DEFS, getMasteryValue } from './data/companions.js?v=21';
+import { pick, weightedPick } from './utils.js?v=21';
 
 // Rarity weight multipliers — lower = rarer
 const RARITY_WEIGHTS = { common: 1, rare: 0.45, epic: 0.18, cursed: 0.10 };

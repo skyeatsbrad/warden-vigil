@@ -2,8 +2,8 @@
 // Pre-allocated pool with swap-and-pop removal. Zero allocations during gameplay
 // (hitIds Sets are cleared and reused, not recreated).
 
-import { dist, angle } from './utils.js?v=20';
-import { TRAIL, GLOW } from './data/colors.js?v=20';
+import { dist, angle } from './utils.js?v=21';
+import { TRAIL, GLOW } from './data/colors.js?v=21';
 
 const PROJ_POOL_SIZE = 300;
 const TRAIL_LEN = TRAIL.projectileLen;
