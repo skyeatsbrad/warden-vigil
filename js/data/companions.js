@@ -11,7 +11,8 @@ export const COMPANION_DEFS = {
     desc: 'A tiny spark of condensed light that orbits the Warden.',
     attack: 'projectile',
     behavior: 'orbit',
-    baseStats: { damage: 12, cooldown: 0.9, range: 220, speed: 3, projectileSpeed: 320, radius: 6, pierce: 1 },
+    // BALANCE: starter companion — cooldown controls early DPS feel. Lower = punchier opening.
+    baseStats: { damage: 12, cooldown: 0.75, range: 220, speed: 3, projectileSpeed: 320, radius: 6, pierce: 1 },
     ultimate: { name: 'Nova Burst', desc: 'All enemies on screen take massive Solar damage', cooldown: 30 },
     unlocked: true,
   },
@@ -23,7 +24,8 @@ export const COMPANION_DEFS = {
     desc: 'A gnashing gear-beast that slams nearby foes.',
     attack: 'melee',
     behavior: 'chase',
-    baseStats: { damage: 20, cooldown: 0.7, range: 60, speed: 2.8, projectileSpeed: 0, radius: 14, pierce: 0 },
+    // BALANCE: melee starter — fast attack cadence makes it feel aggressive immediately.
+    baseStats: { damage: 20, cooldown: 0.55, range: 60, speed: 2.8, projectileSpeed: 0, radius: 14, pierce: 0 },
     ultimate: { name: 'Overclock', desc: 'All companions attack 3x faster for 8 seconds', cooldown: 35 },
     unlocked: true,
   },

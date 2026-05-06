@@ -6,7 +6,7 @@ export const ENEMY_TYPES = {
     name: 'Crawler',
     color: '#c0392b',
     radius: 8,
-    hp: 10,
+    hp: 8,            // BALANCE: low enough for 1-shot by any starter companion
     damage: 3,
     speed: 52,
     xp: 1,
@@ -16,7 +16,7 @@ export const ENEMY_TYPES = {
     name: 'Drifter',
     color: '#e67e22',
     radius: 7,
-    hp: 8,
+    hp: 6,            // BALANCE: fragile fast enemy, should melt quickly
     damage: 2,
     speed: 76,
     xp: 1,
@@ -124,9 +124,9 @@ export const ENEMY_TYPES = {
 
 // Wave scaling configuration
 export const WAVE_CONFIG = {
-  baseInterval: 4.2,       // seconds between spawn waves
-  minInterval: 0.85,
-  spawnRateDecay: 0.988,   // slightly slower convergence to floor
+  baseInterval: 2.8,       // BALANCE: seconds between spawn waves (lower = busier early game)
+  minInterval: 0.85,       // floor — unchanged so late game density is the same
+  spawnRateDecay: 0.985,   // BALANCE: how fast interval shrinks per wave (lower = faster ramp)
   hpScale: 0.095,          // +9.5% hp per effective minute
   damageScale: 0.048,      // +4.8% damage per effective minute
   maxEnemies: 220,

@@ -160,13 +160,14 @@ export class EnemySystem {
     const vals = this._weightVals;
 
     const ri = Math.min(this.realmIndex, REALM_DEFS.length - 1);
-    let count = 2 + Math.floor(realmElapsed / 35) + Math.floor(ri * REALM_CONFIG.waveSizePerRealm);
+    // BALANCE: base wave size — higher = busier early. Scales +1 per 35s of realm time.
+    let count = 3 + Math.floor(realmElapsed / 35) + Math.floor(ri * REALM_CONFIG.waveSizePerRealm);
 
     if (realmElapsed > 120) {
       count += Math.floor((realmElapsed - 120) / 60);
     }
 
-    count = Math.min(count, 10 + ri);
+    count = Math.min(count, 12 + ri);  // BALANCE: per-wave cap (soft ceiling)
 
     for (let i = 0; i < count; i++) {
       if (!this._hasCapacity(1)) break;

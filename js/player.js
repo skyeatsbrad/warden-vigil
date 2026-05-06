@@ -14,12 +14,12 @@ export class Player {
     this.invulnDuration = 0.55;
     this.xp = 0;
     this.level = 1;
-    this.xpToNext = 8;
+    this.xpToNext = 6;        // BALANCE: XP needed for first level-up (lower = faster early progression)
     this.kills = 0;
     this.totalXp = 0;
     this.color = COLORS.player;
     this.facingAngle = 0;
-    this.magnetRadius = 85;
+    this.magnetRadius = 105;   // BALANCE: XP pickup magnet range (higher = less chasing orbs)
 
     // Panic pulse
     this.panicCooldown = 0;
@@ -68,8 +68,10 @@ export class Player {
       this.level++;
       levels++;
 
+      // BALANCE: XP curve — early levels are cheap (base 6), exponential kicks in later.
+      // Levels 1-7 use gentle 1.18x scaling; 8+ ramps harder at 1.28x.
       if (this.level < 8) {
-        this.xpToNext = Math.floor(8 * Math.pow(1.18, this.level - 1));
+        this.xpToNext = Math.floor(6 * Math.pow(1.18, this.level - 1));
       } else {
         this.xpToNext = Math.floor(12 * Math.pow(1.28, this.level - 8));
       }
