@@ -1,7 +1,7 @@
 // ── UI: HUD + Upgrade selection ──
 
-import { COMPANION_DEFS, DROPPABLE_COMPANIONS, MODIFIERS, getModifiersForType, EVOLUTIONS, getEvolveLevel, TRADEOFF_CARDS, CURSED_CARDS, PERK_CARDS, MASTERY_DEFS, getMasteryValue } from './data/companions.js?v=19';
-import { pick, weightedPick } from './utils.js?v=19';
+import { COMPANION_DEFS, DROPPABLE_COMPANIONS, MODIFIERS, getModifiersForType, getModifiersForCompanion, EVOLUTIONS, getEvolveLevel, TRADEOFF_CARDS, CURSED_CARDS, PERK_CARDS, MASTERY_DEFS, getMasteryValue } from './data/companions.js?v=20';
+import { pick, weightedPick } from './utils.js?v=20';
 
 // Rarity weight multipliers — lower = rarer
 const RARITY_WEIGHTS = { common: 1, rare: 0.45, epic: 0.18, cursed: 0.10 };
@@ -251,22 +251,24 @@ export class UI {
       }
     }
 
-    // ── Type-specific modifiers ──
+    // ── Type-specific modifiers (including companion-specific mutations) ──
     for (const c of companions) {
       if (c.modifiers.length >= 2) continue;
-      const compatibleKeys = getModifiersForType(c.def.attack);
+      const compatibleKeys = getModifiersForCompanion(c.def.attack, c.key);
       const availMods = compatibleKeys.filter(m => !c.modifiers.includes(m) && !c.evolutionGrants.includes(m));
       for (const modKey of availMods) {
         const mod = MODIFIERS[modKey];
         const rarity = mod.rarity || 'rare';
         const name = c.evolutionDef ? c.evolutionDef.name : c.def.name;
+        // Companion-specific mutations get higher weight to appear more often
+        const weightMult = mod.companionKey ? 3 : 2;
         pool.push({
           type: 'modifier', companionId: c.id, modKey,
           icon: mod.icon,
           title: `${name}: ${mod.name}`,
           desc: mod.desc,
           rarity,
-          weight: 2 * RARITY_WEIGHTS[rarity],
+          weight: weightMult * RARITY_WEIGHTS[rarity],
         });
       }
     }

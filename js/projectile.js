@@ -2,8 +2,8 @@
 // Pre-allocated pool with swap-and-pop removal. Zero allocations during gameplay
 // (hitIds Sets are cleared and reused, not recreated).
 
-import { dist, angle } from './utils.js?v=19';
-import { TRAIL, GLOW } from './data/colors.js?v=19';
+import { dist, angle } from './utils.js?v=20';
+import { TRAIL, GLOW } from './data/colors.js?v=20';
 
 const PROJ_POOL_SIZE = 300;
 const TRAIL_LEN = TRAIL.projectileLen;
@@ -53,6 +53,8 @@ export class ProjectileSystem {
     p.isChainBounce = false;
     p.chainFromX = 0;
     p.chainFromY = 0;
+    p.solarFlare = false;
+    p.sparkChain = false;
     return p;
   }
 
@@ -74,6 +76,8 @@ export class ProjectileSystem {
       lifetime = 3,
       ricochet = false,
       sourceId = -1,
+      chain = 0,
+      chainRange = 150,
     } = opts;
 
     const p = this._acquire();
@@ -96,6 +100,10 @@ export class ProjectileSystem {
     p.age = 0;
     p.ricochet = ricochet;
     p.sourceId = sourceId;
+    p.chain = chain;
+    p.chainRange = chainRange;
+    p.solarFlare = opts.solarFlare || false;
+    p.sparkChain = opts.sparkChain || false;
 
     // Split shots
     if (split > 0) {
@@ -243,8 +251,11 @@ export class ProjectileSystem {
           if (nextTarget) {
             const a2 = angle(enemy, nextTarget);
             // Overload: final bounce deals 2×, intermediate bounces normal
+            // Spark chain (from mutations): 50% damage instead of default 70%
             const isLastBounce = p.chain - 1 <= 0;
-            const bounceDmgMult = p.overload ? (isLastBounce ? 2.0 : 1.0) : 0.7;
+            const bounceDmgMult = p.overload ? (isLastBounce ? 2.0 : 1.0)
+                                 : p.sparkChain ? 0.5  // spark_chain mutation: 50% bounce
+                                 : 0.7;
 
             const cp = this._acquire();
             if (cp) {
@@ -279,6 +290,8 @@ export class ProjectileSystem {
               particles.spawnChain(enemy.x, enemy.y, nextTarget.x, nextTarget.y, p.color);
             }
           }
+          // Consume chain on parent so piercing shots don't chain multiple times
+          p.chain = 0;
         }
 
         // Explode
@@ -299,23 +312,40 @@ export class ProjectileSystem {
 
         p.pierce--;
         if (p.pierce <= 0) {
-          // Ricochet: spawn a bounce toward nearest enemy on final hit
+          // Cache ricochet target BEFORE solar flare may kill nearby enemies
+          let ricoTarget = null;
           if (p.ricochet) {
             const ricoCandidates = grid.query2(enemy.x, enemy.y, 200);
-            let ricoTarget = null, ricoMinD = Infinity;
+            let ricoMinD = Infinity;
             for (const e2 of ricoCandidates) {
               if (!e2 || e2.hp <= 0 || p.hitIds.has(e2.id)) continue;
               const d2 = dist(enemy, e2);
               if (d2 < ricoMinD) { ricoMinD = d2; ricoTarget = e2; }
             }
-            if (ricoTarget) {
-              const ra = angle(enemy, ricoTarget);
-              this.spawn(enemy.x, enemy.y, ra, p.speed, p.damage, 1, p.radius, p.color,
-                { homing: p.homing, explodeRadius: p.explodeRadius, slow: p.slow, ricochet: false, sourceId: p.sourceId });
-              // Carry hitIds to prevent re-hitting
-              const rp = this.pool[this.count - 1];
-              if (rp) for (const id of p.hitIds) rp.hitIds.add(id);
+          }
+          // Solar Flare: lingering damage zone on final impact
+          if (p.solarFlare) {
+            const flareRadius = 40;
+            const flareCandidates = grid.query2(enemy.x, enemy.y, flareRadius);
+            for (const e2 of flareCandidates) {
+              if (!e2 || e2.hp <= 0 || e2 === enemy) continue;
+              if (dist(enemy, e2) < flareRadius) {
+                onHit(e2, { damage: Math.round(p.damage * 0.35), slow: 0 });
+              }
             }
+            particles.emit(enemy.x, enemy.y, 8, '#ffcc00', { speedMax: 60, life: 0.5 });
+            particles.spawnImpact(enemy.x, enemy.y, '#ffcc00', {
+              maxRadius: flareRadius, lifetime: 0.4, particles: 6, particleSpeed: 40,
+            });
+          }
+          // Ricochet: spawn a bounce toward cached target
+          if (ricoTarget) {
+            const ra = angle(enemy, ricoTarget);
+            this.spawn(enemy.x, enemy.y, ra, p.speed, p.damage, 1, p.radius, p.color,
+              { homing: p.homing, explodeRadius: p.explodeRadius, slow: p.slow, ricochet: false, sourceId: p.sourceId });
+            // Carry hitIds to prevent re-hitting
+            const rp = this.pool[this.count - 1];
+            if (rp) for (const id of p.hitIds) rp.hitIds.add(id);
           }
           this._kill(i);
           killed = true;

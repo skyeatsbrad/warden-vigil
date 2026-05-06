@@ -185,12 +185,32 @@ export const MODIFIERS = {
   cleave:         { name: 'Cleave',           desc: '+80% hit radius, hits more enemies',        icon: '⚔', attackTypes: ['melee'], rarity: 'rare' },
   frenzy_strike:  { name: 'Frenzy Strike',    desc: 'Kills halve the remaining cooldown',       icon: '⚡', attackTypes: ['melee'], rarity: 'rare' },
   vampiric:       { name: 'Vampiric',         desc: 'Heal 1 HP per enemy hit',                  icon: '🩸', attackTypes: ['melee'], rarity: 'epic' },
+
+  // ── Companion-specific mutations ──
+  // These only appear for the matching companion (companionKey filter).
+  spark_chain:    { name: 'Spark Chain',      desc: 'Shots chain once to a nearby enemy (50% dmg)',  icon: '⚡', attackTypes: ['projectile'], companionKey: 'glintbug', rarity: 'rare' },
+  solar_flare:    { name: 'Solar Flare',      desc: 'Shots leave a brief damage zone on impact',     icon: '☼', attackTypes: ['projectile'], companionKey: 'glintbug', rarity: 'epic' },
+  shockwave_bite: { name: 'Shockwave Bite',   desc: 'Kills create a small shockwave (radius 60)',    icon: '💥', attackTypes: ['melee'],      companionKey: 'rustmaw', rarity: 'rare' },
+  iron_jaw:       { name: 'Iron Jaw',         desc: 'Hits slow enemies 40% for 1.5s',                icon: '🦷', attackTypes: ['melee'],      companionKey: 'rustmaw', rarity: 'rare' },
+  void_anchor:    { name: 'Void Anchor',      desc: 'Aura pulls harder and has +20% range',          icon: '⊗', attackTypes: ['aura'],       companionKey: 'nullwisp', rarity: 'epic' },
 };
 
-// Get modifiers compatible with a given attack type
+// Get modifiers compatible with a given companion
+export function getModifiersForCompanion(attackType, companionKey) {
+  return Object.entries(MODIFIERS)
+    .filter(([, m]) => {
+      if (!m.attackTypes.includes(attackType)) return false;
+      // If modifier is companion-locked, only show for that companion
+      if (m.companionKey && m.companionKey !== companionKey) return false;
+      return true;
+    })
+    .map(([key]) => key);
+}
+
+// Get modifiers compatible with a given attack type (legacy — includes all)
 export function getModifiersForType(attackType) {
   return Object.entries(MODIFIERS)
-    .filter(([, m]) => m.attackTypes.includes(attackType))
+    .filter(([, m]) => m.attackTypes.includes(attackType) && !m.companionKey)
     .map(([key]) => key);
 }
 

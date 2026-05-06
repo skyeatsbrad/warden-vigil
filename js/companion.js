@@ -1,8 +1,8 @@
 // ── Companion system ──
 
-import { COMPANION_DEFS, getCompanionStats, MODIFIERS, EVOLUTIONS } from './data/companions.js?v=19';
-import { dist, angle } from './utils.js?v=19';
-import { GLOW, TRAIL } from './data/colors.js?v=19';
+import { COMPANION_DEFS, getCompanionStats, MODIFIERS, EVOLUTIONS } from './data/companions.js?v=20';
+import { dist, angle } from './utils.js?v=20';
+import { GLOW, TRAIL } from './data/colors.js?v=20';
 
 const ORBIT_TRAIL_LEN = TRAIL.orbitLen;
 
@@ -227,25 +227,35 @@ export class Companion {
           const hasHoming = this.hasEffect('homing');
           const hasPierce = this.hasEffect('piercing_surge');
           const hasRicochet = this.hasEffect('ricochet');
+          // Companion-specific mutations
+          const hasSparkChain = this.hasEffect('spark_chain');
+          const hasSolarFlare = this.hasEffect('solar_flare');
           const explR = hasDetonate ? 50 : 0;
           const pierce = this.stats.pierce + (hasPierce ? 3 : 0);
           const damage = Math.round(this.stats.damage * dmgMult);
+
+          // Build projectile options
+          const projOpts = {
+            homing: hasHoming, explodeRadius: explR, ricochet: hasRicochet, sourceId: this.id,
+            chain: hasSparkChain ? 1 : 0,      // MUTATION: spark chain adds 1 bounce
+            chainRange: 120,
+            solarFlare: hasSolarFlare,           // MUTATION: solar flare lingering AoE
+            sparkChain: hasSparkChain,           // MUTATION: flag for 50% bounce damage
+          };
 
           if (hasBloom) {
             for (let i = -1; i <= 1; i++) {
               projectileSystem.spawn(
                 this.x, this.y, a + i * 0.25,
                 this.stats.projectileSpeed, damage,
-                pierce, this.stats.radius, this.color,
-                { homing: hasHoming, explodeRadius: explR, ricochet: hasRicochet, sourceId: this.id }
+                pierce, this.stats.radius, this.color, projOpts
               );
             }
           } else {
             projectileSystem.spawn(
               this.x, this.y, a,
               this.stats.projectileSpeed, damage,
-              pierce, this.stats.radius, this.color,
-              { homing: hasHoming, explodeRadius: explR, ricochet: hasRicochet, sourceId: this.id }
+              pierce, this.stats.radius, this.color, projOpts
             );
           }
         }
@@ -256,10 +266,14 @@ export class Companion {
           const hasCleave = this.hasEffect('cleave');
           const hasVampiric = this.hasEffect('vampiric');
           const hasFrenzy = this.hasEffect('frenzy_strike');
+          // Companion-specific mutations
+          const hasIronJaw = this.hasEffect('iron_jaw');
+          const hasShockwave = this.hasEffect('shockwave_bite');
           const hitRange = this.stats.range * (hasCleave ? 1.8 : 1);
           const damage = Math.round(this.stats.damage * dmgMult);
           const nearby = grid.query(this.x, this.y, hitRange + 20);
           let meleeKills = 0;
+          const killPositions = []; // MUTATION: track kill locations for shockwave
           for (const e of nearby) {
             if (e.hp <= 0) continue;
             if (dist(this, e) < hitRange + e.radius) {
@@ -269,13 +283,36 @@ export class Companion {
               e.hitFlash = 0.1;
               this._totalDamage += actualDmg;
               if (hasVampiric) this.owner.heal(1);
-              if (wasAlive && e.hp <= 0) meleeKills++;
+              // MUTATION: Iron Jaw — hits slow enemies
+              if (hasIronJaw) {
+                e.slowTimer = Math.max(e.slowTimer || 0, 1.5);
+              }
+              if (wasAlive && e.hp <= 0) {
+                meleeKills++;
+                if (hasShockwave) killPositions.push({ x: e.x, y: e.y });
+              }
               particles.emit(e.x, e.y, 4, this.color, { speedMax: 80, life: 0.3 });
               particles.text(e.x, e.y - e.radius, damage.toString(), this.color);
             }
           }
           if (hasFrenzy && meleeKills > 0) {
             this.cooldownTimer *= 0.5;
+          }
+          // MUTATION: Shockwave Bite — kills create a small shockwave
+          if (hasShockwave) {
+            for (const kp of killPositions) {
+              const shockTargets = grid.query(kp.x, kp.y, 60);
+              for (const e2 of shockTargets) {
+                if (e2.hp <= 0) continue;
+                if (dist(kp, e2) < 60) {
+                  e2.hp -= 8;
+                  e2.hitFlash = 0.08;
+                }
+              }
+              particles.spawnImpact(kp.x, kp.y, '#95a5a6', {
+                maxRadius: 60, lifetime: 0.25, particles: 6, particleSpeed: 80,
+              });
+            }
           }
         }
         break;
@@ -285,23 +322,27 @@ export class Companion {
           const hasEcho = this.hasEffect('pulse_echo');
           const hasSlowF = this.hasEffect('slow_field');
           const hasGravity = this.hasEffect('gravity_well');
+          // MUTATION: Void Anchor — stronger pull and +20% range
+          const hasVoidAnchor = this.hasEffect('void_anchor');
+          const auraRange = hasVoidAnchor ? Math.round(this.stats.range * 1.2) : this.stats.range;
+          const pullStrength = hasVoidAnchor ? 45 : 30; // base gravity pull vs enhanced
           const dmg = Math.round((hasEcho ? this.stats.damage * 2 : this.stats.damage) * dmgMult);
-          const nearby = grid.query(this.x, this.y, this.stats.range);
+          const nearby = grid.query(this.x, this.y, auraRange);
           for (const e of nearby) {
             if (e.hp <= 0) continue;
             const d = dist(this, e);
-            if (d < this.stats.range) {
+            if (d < auraRange) {
               const actualDmg = Math.min(dmg, Math.max(0, e.hp));
               e.hp -= dmg;
               e.hitFlash = 0.1;
               this._totalDamage += actualDmg;
               if (hasSlowF) e.slowTimer = Math.max(e.slowTimer || 0, 2.0);
-              // Gravity well: pull enemies toward companion
-              if (hasGravity && d > 20) {
+              // Gravity well / Void Anchor: pull enemies toward companion
+              if ((hasGravity || hasVoidAnchor) && d > 20) {
                 const dx = this.x - e.x, dy = this.y - e.y;
                 const len = Math.sqrt(dx * dx + dy * dy) || 1;
-                e.x += (dx / len) * 30;
-                e.y += (dy / len) * 30;
+                e.x += (dx / len) * pullStrength;
+                e.y += (dy / len) * pullStrength;
               }
               particles.text(e.x, e.y - e.radius, dmg.toString(), this.color, 10);
             }
